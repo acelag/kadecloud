@@ -38,11 +38,17 @@ Create the PostgreSQL database:
 createdb kadecloud
 ```
 
-Load the schema:
+Load the schema and apply migrations. On a fresh (empty) database the migrate
+command loads `database/schema.sql` automatically before applying migrations,
+so a single command bootstraps everything:
 
 ```bash
-psql postgres://postgres:postgres@localhost:5432/kadecloud -f database/schema.sql
+npm run migrate -w server
 ```
+
+This is safe to re-run: it detects an already-loaded schema and only applies
+pending migrations. (You can still load the base schema manually with
+`psql "$DATABASE_URL" -f database/schema.sql` if you prefer.)
 
 The backend reads the database connection from `DATABASE_URL` in `server/.env`.
 

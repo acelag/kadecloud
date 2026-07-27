@@ -16,6 +16,9 @@ import { getClient } from "../config/db.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = path.resolve(here, "../../../database/migrations");
+// The base tables/enums live here, NOT in the migrations directory. On a fresh
+// database we load this first; migrations are incremental changes on top of it.
+const SCHEMA_FILE = path.resolve(here, "../../../database/schema.sql");
 
 const args = new Set(process.argv.slice(2));
 const SHOW_STATUS = args.has("--status");
@@ -76,6 +79,38 @@ async function applyMigration(client, filename) {
   }
 }
 
+async function isBaseSchemaMissing(client) {
+  // to_regclass returns NULL when the relation doesn't exist. If a core table
+  // is absent we treat the database as fresh and load schema.sql first. This
+  // also handles a DB where schema.sql was applied manually (table present →
+  // we skip the load) so re-running is always safe.
+  const result = await client.query("SELECT to_regclass('public.stores') AS reg");
+  return result.rows[0].reg === null;
+}
+
+async function applyBaseSchema(client) {
+  const sql = await readFile(SCHEMA_FILE, "utf8");
+  process.stdout.write("  → loading database/schema.sql (fresh database)... ");
+  const started = Date.now();
+  try {
+    await client.query("BEGIN");
+    await client.query(sql);
+    // Record a marker row for visibility in --status. checkExistingChecksums
+    // only inspects migration files, so this never triggers a mismatch warning.
+    await client.query(
+      `INSERT INTO schema_migrations (filename, checksum)
+       VALUES ($1, $2) ON CONFLICT (filename) DO NOTHING`,
+      ["database/schema.sql", checksum(sql)]
+    );
+    await client.query("COMMIT");
+    process.stdout.write(`ok (${Date.now() - started}ms)\n`);
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    process.stdout.write("FAILED\n");
+    throw err;
+  }
+}
+
 async function checkExistingChecksums(client, files) {
   const result = await client.query(
     "SELECT filename, checksum FROM schema_migrations"
@@ -97,14 +132,11 @@ async function checkExistingChecksums(client, files) {
 
 async function main() {
   const files = await listMigrationFiles();
-  if (files.length === 0) {
-    console.log("No migration files found in", MIGRATIONS_DIR);
-    return;
-  }
 
   const client = await getClient();
   try {
     await ensureTrackingTable(client);
+    const baseMissing = await isBaseSchemaMissing(client);
     const applied = await appliedSet(client);
     const pending = files.filter((f) => !applied.has(f));
     const mismatches = await checkExistingChecksums(client, files);
@@ -125,6 +157,7 @@ async function main() {
 
     if (SHOW_STATUS) {
       console.log(`Database: ${maskUrl(config.databaseUrl)}`);
+      console.log(`Base schema: ${baseMissing ? "not loaded" : "loaded"}`);
       console.log(`Total migrations: ${files.length}`);
       console.log(`Applied: ${files.length - pending.length}`);
       console.log(`Pending: ${pending.length}`);
@@ -136,20 +169,31 @@ async function main() {
       return;
     }
 
-    if (pending.length === 0) {
+    if (!baseMissing && pending.length === 0) {
       console.log("Database is up to date. Nothing to apply.");
       return;
     }
 
-    console.log(`Applying ${pending.length} migration(s):`);
     if (DRY_RUN) {
+      if (baseMissing) {
+        console.log("  • database/schema.sql (fresh database — would load base schema)");
+      }
+      console.log(`Would apply ${pending.length} migration(s):`);
       for (const f of pending) console.log(`  • ${f} (dry run, not applied)`);
       return;
     }
 
-    for (const file of pending) {
-      // eslint-disable-next-line no-await-in-loop
-      await applyMigration(client, file);
+    if (baseMissing) {
+      console.log("Fresh database detected — loading base schema first.");
+      await applyBaseSchema(client);
+    }
+
+    if (pending.length > 0) {
+      console.log(`Applying ${pending.length} migration(s):`);
+      for (const file of pending) {
+        // eslint-disable-next-line no-await-in-loop
+        await applyMigration(client, file);
+      }
     }
     console.log("All migrations applied.");
   } finally {
