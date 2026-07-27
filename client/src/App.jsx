@@ -1,6 +1,5 @@
 import { Navigate, Route, Routes, useParams } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
-import Footer from "./components/Footer.jsx";
 import { useStoreHost } from "./context/StoreHostContext.jsx";
 
 function StoreScopedShopperLogin() {
@@ -154,20 +153,11 @@ function App() {
   // A host mapped to a store's admin_domain (surface "admin") falls through to
   // the dashboard/login routes below, same as a platform host.
   if (hostStore && hostSurface === "storefront") {
-    return (
-      <div className="flex min-h-screen flex-col">
-        <div className="flex-1">
-          <StorefrontApp slug={hostStore.slug} />
-        </div>
-        <Footer />
-      </div>
-    );
+    return <StorefrontApp slug={hostStore.slug} />;
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <div className="flex-1">
-        <Routes>
+    <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
@@ -191,10 +181,7 @@ function App() {
       <Route path="/store/:slug/account" element={<StoreScopedShopperAccount />} />
       {dashboardRouteTree("/login")}
       <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
-      </div>
-      <Footer />
-    </div>
+    </Routes>
   );
 }
 
