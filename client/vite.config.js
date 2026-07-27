@@ -3,6 +3,11 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [react()],
+  // Stamp the build time (≈ deploy time on Render, since the build runs on
+  // deploy) so the footer can show when the app was last deployed.
+  define: {
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString())
+  },
   server: {
     host: "0.0.0.0",
     port: 5173,
