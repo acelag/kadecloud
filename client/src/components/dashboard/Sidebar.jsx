@@ -50,6 +50,9 @@ function Sidebar({ isOpen, onClose }) {
   // Platform super admin sees the product name; store users see their store.
   const brandName = isAdmin ? "KadeCloud" : user?.store?.name || "KadeCloud";
   const logoUrl = isAdmin ? null : user?.store?.logo_url || null;
+  // Store-chosen logo size. Static classes so Tailwind JIT keeps them.
+  const LOGO_HEIGHT = { small: "h-8", medium: "h-12", large: "h-14" };
+  const logoClass = LOGO_HEIGHT[user?.store?.logo_size] || LOGO_HEIGHT.medium;
   const navItems = isAdmin
     ? adminNavItems
     : isStoreAdmin
@@ -77,7 +80,7 @@ function Sidebar({ isOpen, onClose }) {
               <img
                 src={logoUrl}
                 alt={brandName}
-                className="h-12 w-auto max-w-[190px] shrink-0 object-contain"
+                className={`${logoClass} w-auto max-w-[190px] shrink-0 object-contain`}
               />
             ) : (
               <div className="min-w-0">

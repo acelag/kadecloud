@@ -121,7 +121,8 @@ function accountSelectSql() {
     stores.city AS store_city,
     stores.district AS store_district,
     stores.logo_url AS store_logo_url,
-    stores.favicon_url AS store_favicon_url
+    stores.favicon_url AS store_favicon_url,
+    stores.logo_size AS store_logo_size
    FROM users
    LEFT JOIN stores ON stores.id = users.store_id OR stores.seller_id = users.id`;
 }
@@ -142,7 +143,8 @@ function toUserResponse(row, impersonator = null) {
           city: row.store_city,
           district: row.store_district,
           logo_url: row.store_logo_url,
-          favicon_url: row.store_favicon_url
+          favicon_url: row.store_favicon_url,
+          logo_size: row.store_logo_size
         }
       : null
   };

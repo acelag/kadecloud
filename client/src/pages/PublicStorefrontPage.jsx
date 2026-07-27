@@ -12,6 +12,11 @@ import { useCurrency } from "../context/CurrencyContext.jsx";
 import { setFavicon } from "../utils/favicon.js";
 
 // Static class lookups so Tailwind JIT picks them up at build time.
+const STOREFRONT_LOGO_HEIGHT = {
+  small: "h-8",
+  medium: "h-10",
+  large: "h-14"
+};
 const PRODUCT_GRID_COLUMNS = {
   1: "sm:grid-cols-1 lg:grid-cols-1",
   2: "sm:grid-cols-2 lg:grid-cols-2",
@@ -117,8 +122,8 @@ function PublicStorefrontPage({ slug: slugProp } = {}) {
             {store?.logo_url ? (
               <img
                 src={store.logo_url}
-                alt=""
-                className="h-10 w-10 shrink-0 rounded-md object-cover"
+                alt={store?.name || ""}
+                className={`${STOREFRONT_LOGO_HEIGHT[store?.logo_size] || STOREFRONT_LOGO_HEIGHT.medium} w-auto max-w-[220px] shrink-0 rounded-md object-contain`}
               />
             ) : (
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">

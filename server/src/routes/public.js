@@ -233,6 +233,7 @@ async function getPublicStore(slug) {
       district,
       logo_url,
       favicon_url,
+      logo_size,
       default_currency,
       storefront_card_aspect,
       storefront_products_per_row,

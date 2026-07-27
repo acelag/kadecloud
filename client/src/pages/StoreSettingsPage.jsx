@@ -33,6 +33,7 @@ const emptyStore = {
   district: "",
   logo_url: "",
   favicon_url: "",
+  logo_size: "medium",
   default_currency: "LKR",
   storefront_card_aspect: "4:3",
   storefront_products_per_row: 3,
@@ -530,6 +531,21 @@ function StoreSettingsPage() {
                       JPG, PNG, or WebP · up to 5MB
                     </span>
                   </div>
+                </div>
+                <div className="mt-3 flex items-center gap-2">
+                  <span className="text-sm font-semibold text-slate-700">
+                    Logo size
+                  </span>
+                  <select
+                    name="logo_size"
+                    value={store.logo_size || "medium"}
+                    onChange={updateStore}
+                    className="h-10 rounded-md border border-slate-300 px-3 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                  >
+                    <option value="small">Small</option>
+                    <option value="medium">Medium</option>
+                    <option value="large">Large</option>
+                  </select>
                 </div>
                 <input
                   name="logo_url"
