@@ -136,6 +136,17 @@ export const config = {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean),
+  // Where store owners point their custom domains. Shown on the super-admin
+  // Store Domains page so DNS records can be handed out without guesswork.
+  //   PLATFORM_DNS_TARGET   — CNAME target for subdomains (e.g. www./admin.)
+  //   PLATFORM_DNS_APEX_IPS — comma-separated A-record IPs for apex domains
+  dns: {
+    cnameTarget: env.PLATFORM_DNS_TARGET || null,
+    apexIps: (env.PLATFORM_DNS_APEX_IPS || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+  },
   sentryDsn: env.SENTRY_DSN || null,
   logLevel: env.LOG_LEVEL || (isProduction ? "info" : "debug"),
   smtp: {

@@ -3,9 +3,27 @@ import { useEffect, useState } from "react";
 import { adminApi } from "../api/client.js";
 import StatusBadge from "../components/dashboard/StatusBadge.jsx";
 
+// A domain with 2 labels (example.com) is an apex → A records; anything with a
+// leftmost label (www.example.com, admin.example.com) → a CNAME. This is a
+// practical heuristic and doesn't cover multi-part TLDs like .co.uk.
+function dnsRecordFor(domain, dns) {
+  if (!domain) return null;
+  const labels = domain.split(".").filter(Boolean);
+  const isApex = labels.length <= 2;
+  if (isApex) {
+    return {
+      type: "A",
+      host: domain,
+      points: dns.apexIps && dns.apexIps.length ? dns.apexIps.join(", ") : null
+    };
+  }
+  return { type: "CNAME", host: domain, points: dns.cnameTarget || null };
+}
+
 function AdminDomainsPage() {
   const [stores, setStores] = useState([]);
   const [drafts, setDrafts] = useState({});
+  const [dns, setDns] = useState({ cnameTarget: null, apexIps: [] });
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState("");
   const [error, setError] = useState("");
@@ -19,6 +37,7 @@ function AdminDomainsPage() {
       const data = await adminApi.listStores();
       const list = data.stores || [];
       setStores(list);
+      setDns(data.dns || { cnameTarget: null, apexIps: [] });
       setDrafts(
         Object.fromEntries(
           list.map((store) => [
@@ -136,6 +155,41 @@ function AdminDomainsPage() {
           </div>
         </div>
 
+        <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
+          <p className="text-sm font-semibold text-slate-700">
+            DNS target for custom domains
+          </p>
+          {dns.cnameTarget || (dns.apexIps && dns.apexIps.length) ? (
+            <dl className="mt-2 grid gap-2 sm:grid-cols-2">
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Subdomains (www., admin., …) → CNAME
+                </dt>
+                <dd className="mt-1 font-mono text-sm text-slate-800">
+                  {dns.cnameTarget || "— not configured —"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Apex domain (example.lk) → A record
+                </dt>
+                <dd className="mt-1 font-mono text-sm text-slate-800">
+                  {dns.apexIps && dns.apexIps.length
+                    ? dns.apexIps.join(", ")
+                    : "— not configured —"}
+                </dd>
+              </div>
+            </dl>
+          ) : (
+            <p className="mt-1 text-sm text-slate-500">
+              Set <span className="font-mono">PLATFORM_DNS_TARGET</span> (CNAME
+              target for subdomains) and{" "}
+              <span className="font-mono">PLATFORM_DNS_APEX_IPS</span> (A-record
+              IPs) on the API to show exact records here.
+            </p>
+          )}
+        </div>
+
         {loading ? (
           <div className="p-6 text-sm text-slate-500">Loading stores...</div>
         ) : stores.length === 0 ? (
@@ -237,24 +291,52 @@ function AdminDomainsPage() {
                     </button>
                   </div>
 
-                  <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
-                    {store.custom_domain ? (
-                      <span>
-                        Storefront:{" "}
-                        <span className="font-mono">
-                          https://{store.custom_domain}
-                        </span>
-                      </span>
-                    ) : null}
-                    {store.admin_domain ? (
-                      <span>
-                        Admin:{" "}
-                        <span className="font-mono">
-                          https://{store.admin_domain}
-                        </span>
-                      </span>
-                    ) : null}
-                  </div>
+                  {store.custom_domain || store.admin_domain ? (
+                    <div className="mt-3 space-y-2 rounded-md bg-slate-50 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        DNS records to create
+                      </p>
+                      {[
+                        { label: "Storefront", domain: store.custom_domain },
+                        { label: "Admin", domain: store.admin_domain }
+                      ]
+                        .filter((row) => row.domain)
+                        .map((row) => {
+                          const rec = dnsRecordFor(row.domain, dns);
+                          return (
+                            <div
+                              key={row.label}
+                              className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600"
+                            >
+                              <span className="font-semibold text-slate-700">
+                                {row.label}:
+                              </span>
+                              <span className="inline-flex items-center rounded bg-slate-200 px-1.5 py-0.5 font-mono font-semibold text-slate-700">
+                                {rec.type}
+                              </span>
+                              <span className="font-mono">{rec.host}</span>
+                              <span className="text-slate-400">→</span>
+                              <span className="font-mono">
+                                {rec.points || (
+                                  <span className="text-amber-600">
+                                    (set platform DNS target)
+                                  </span>
+                                )}
+                              </span>
+                              <span className="text-slate-400">·</span>
+                              <a
+                                href={`https://${row.domain}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-mono text-emerald-700 hover:underline"
+                              >
+                                https://{row.domain}
+                              </a>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  ) : null}
                 </article>
               );
             })}

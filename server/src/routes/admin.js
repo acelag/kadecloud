@@ -8,6 +8,7 @@ import { getUserStore } from "../utils/storeAccess.js";
 import { SUPPORTED_CURRENCIES } from "../utils/currencyRates.js";
 import { normalizeStoreDomains } from "../utils/domains.js";
 import { invalidateCorsHost } from "../config/cors.js";
+import { config } from "../config/env.js";
 
 const router = express.Router();
 const saltRounds = 12;
@@ -172,7 +173,11 @@ router.get(
     );
 
     return res.status(200).json({
-      stores: result.rows
+      stores: result.rows,
+      dns: {
+        cnameTarget: config.dns.cnameTarget,
+        apexIps: config.dns.apexIps
+      }
     });
   })
 );
