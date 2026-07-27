@@ -29,7 +29,13 @@ export function StoreHostProvider({ children }) {
       .then((data) => {
         if (isMounted) {
           setStore(data.store);
-          setSurface(data.store?.surface || "storefront");
+          const resolvedSurface = data.store?.surface || "storefront";
+          setSurface(resolvedSurface);
+          // Brand the browser tab with the store name on storefront hosts.
+          // (Admin hosts are branded by DashboardLayout instead.)
+          if (data.store && resolvedSurface === "storefront") {
+            document.title = data.store.name;
+          }
         }
       })
       .catch(() => {

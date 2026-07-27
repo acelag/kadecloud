@@ -7,6 +7,8 @@ function TopHeader({ onMenuClick }) {
     user?.role === "platform_admin"
       ? "Super admin workspace"
       : user?.store?.name || "Seller workspace";
+  const logoUrl =
+    user?.role === "platform_admin" ? null : user?.store?.logo_url || null;
   const roleLabel =
     user?.role === "store_admin"
       ? "Store Admin"
@@ -26,6 +28,13 @@ function TopHeader({ onMenuClick }) {
           >
             <Menu aria-hidden="true" size={20} />
           </button>
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt={`${workspaceName} logo`}
+              className="hidden h-9 w-9 shrink-0 rounded-md object-cover sm:block"
+            />
+          ) : null}
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-slate-500">
               {workspaceName} · {roleLabel}
