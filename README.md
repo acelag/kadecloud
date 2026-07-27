@@ -50,6 +50,17 @@ This is safe to re-run: it detects an already-loaded schema and only applies
 pending migrations. (You can still load the base schema manually with
 `psql "$DATABASE_URL" -f database/schema.sql` if you prefer.)
 
+Optionally seed the demo accounts shown on the login page (all with password
+`Password123`): `admin@example.com` (super admin), `aselagamlath@gmail.com`
+(store admin, owns "kade Fashion"), and `seller@example.com` (seller):
+
+```bash
+npm run seed -w server
+```
+
+Seeding is idempotent and does not overwrite existing accounts. Override the
+password with `SEED_PASSWORD`.
+
 The backend reads the database connection from `DATABASE_URL` in `server/.env`.
 
 If you loaded an earlier schema during development, recreate the local database or apply equivalent `ALTER TABLE` changes before using product management.
