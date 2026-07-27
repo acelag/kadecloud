@@ -1,0 +1,79 @@
+# KadeCloud — Render Blueprint
+# Provisions the whole stack: PostgreSQL + API web service + static client.
+#
+# Apply via Render dashboard → New → Blueprint → select this repo.
+# After the first apply, fill in the values marked `sync: false` (see the
+# comments) and the R2/S3 keys when you set up object storage.
+#
+# Docs: https://render.com/docs/blueprint-spec
+
+databases:
+  - name: kadecloud-db
+    databaseName: kadecloud
+    user: kadecloud
+    plan: free            # free DBs expire after ~30 days — bump to `basic-256mb`+ for production
+    region: singapore     # closest region to Sri Lanka; keep DB + API in the same region
+
+services:
+  # ── API (Express, server/) ────────────────────────────────────────────────
+  - type: web
+    name: kadecloud-api
+    runtime: node
+    plan: starter         # preDeployCommand requires a paid instance type
+    region: singapore
+    branch: main
+    buildCommand: npm install
+    startCommand: npm run start:server
+    preDeployCommand: npm run migrate -w server   # auto-loads schema + migrations on a fresh DB
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kadecloud-db
+          property: connectionString              # internal connection, no SSL needed
+      - key: JWT_SECRET
+        generateValue: true                       # Render generates a long random secret
+      # URLs — fill these after the static site gets its URL (Step in chat):
+      - key: PUBLIC_BASE_URL
+        sync: false                               # e.g. https://kadecloud-web.onrender.com
+      - key: CORS_ORIGINS
+        sync: false                               # e.g. https://kadecloud-web.onrender.com
+      - key: PLATFORM_HOSTS
+        sync: false                               # e.g. kadecloud-web.onrender.com
+      # Storage — deferred. This lets the API boot on ephemeral local disk.
+      # When you set up Cloudflare R2, fill the S3_* keys and DELETE this var.
+      - key: ALLOW_LOCAL_STORAGE
+        value: "true"
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_REGION
+        value: auto
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_PUBLIC_BASE_URL
+        sync: false
+      - key: S3_FORCE_PATH_STYLE
+        value: "true"
+
+  # ── Client SPA (React/Vite, client/) ───────────────────────────────────────
+  - type: web
+    name: kadecloud-web
+    runtime: static
+    branch: main
+    buildCommand: npm install && npm run build
+    staticPublishPath: client/dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false                               # MUST include /api, e.g. https://kadecloud-api.onrender.com/api
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html                  # SPA client-side routing
