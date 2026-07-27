@@ -119,7 +119,8 @@ function accountSelectSql() {
     stores.slug AS store_slug,
     stores.phone AS store_phone,
     stores.city AS store_city,
-    stores.district AS store_district
+    stores.district AS store_district,
+    stores.logo_url AS store_logo_url
    FROM users
    LEFT JOIN stores ON stores.id = users.store_id OR stores.seller_id = users.id`;
 }
@@ -138,7 +139,8 @@ function toUserResponse(row, impersonator = null) {
           slug: row.store_slug,
           phone: row.store_phone,
           city: row.store_city,
-          district: row.store_district
+          district: row.store_district,
+          logo_url: row.store_logo_url
         }
       : null
   };

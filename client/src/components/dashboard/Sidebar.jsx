@@ -49,6 +49,7 @@ function Sidebar({ isOpen, onClose }) {
   const isStoreAdmin = user?.role === "store_admin";
   // Platform super admin sees the product name; store users see their store.
   const brandName = isAdmin ? "KadeCloud" : user?.store?.name || "KadeCloud";
+  const logoUrl = isAdmin ? null : user?.store?.logo_url || null;
   const navItems = isAdmin
     ? adminNavItems
     : isStoreAdmin
@@ -70,15 +71,26 @@ function Sidebar({ isOpen, onClose }) {
         }`}
       >
         <div className="flex h-16 items-center justify-between border-b border-slate-200 px-5">
-          <div>
-            <p className="text-lg font-bold text-slate-950">{brandName}</p>
-            <p className="text-xs font-medium text-slate-500">
-              {isAdmin
-                ? "Super admin"
-                : isStoreAdmin
-                  ? "Store admin console"
-                  : "Seller console"}
-            </p>
+          <div className="flex min-w-0 items-center gap-3">
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt={`${brandName} logo`}
+                className="h-9 w-9 shrink-0 rounded-md object-cover"
+              />
+            ) : null}
+            <div className="min-w-0">
+              <p className="truncate text-lg font-bold text-slate-950">
+                {brandName}
+              </p>
+              <p className="truncate text-xs font-medium text-slate-500">
+                {isAdmin
+                  ? "Super admin"
+                  : isStoreAdmin
+                    ? "Store admin console"
+                    : "Seller console"}
+              </p>
+            </div>
           </div>
           <button
             type="button"
