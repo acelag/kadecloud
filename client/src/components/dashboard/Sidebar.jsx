@@ -47,6 +47,8 @@ function Sidebar({ isOpen, onClose }) {
   const { user, isImpersonating } = useAuth();
   const isAdmin = user?.role === "platform_admin" && !isImpersonating;
   const isStoreAdmin = user?.role === "store_admin";
+  // Platform super admin sees the product name; store users see their store.
+  const brandName = isAdmin ? "KadeCloud" : user?.store?.name || "KadeCloud";
   const navItems = isAdmin
     ? adminNavItems
     : isStoreAdmin
@@ -69,7 +71,7 @@ function Sidebar({ isOpen, onClose }) {
       >
         <div className="flex h-16 items-center justify-between border-b border-slate-200 px-5">
           <div>
-            <p className="text-lg font-bold text-slate-950">KadeCloud</p>
+            <p className="text-lg font-bold text-slate-950">{brandName}</p>
             <p className="text-xs font-medium text-slate-500">
               {isAdmin
                 ? "Super admin"
