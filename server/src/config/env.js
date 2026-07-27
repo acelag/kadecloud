@@ -85,9 +85,20 @@ if (hasAnyS3Config) {
   }
 }
 if (isProduction && !hasAnyS3Config) {
-  errors.push(
-    "Object storage is required in production. Set S3_BUCKET, S3_ENDPOINT, S3_REGION, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY (Cloudflare R2 works)."
-  );
+  // Object storage is required in production because the local disk driver
+  // writes to an ephemeral filesystem (wiped on every redeploy/restart).
+  // ALLOW_LOCAL_STORAGE=true is an explicit, temporary escape hatch so the
+  // server can boot without S3 for early testing — never leave it on once
+  // real uploads matter.
+  if (env.ALLOW_LOCAL_STORAGE === "true") {
+    warnings.push(
+      "ALLOW_LOCAL_STORAGE=true — running on LOCAL DISK in production. Uploaded files are EPHEMERAL and lost on every redeploy/restart. Configure S3_* (Cloudflare R2) before real use."
+    );
+  } else {
+    errors.push(
+      "Object storage is required in production. Set S3_BUCKET, S3_ENDPOINT, S3_REGION, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY (Cloudflare R2 works). To boot temporarily on ephemeral local disk, set ALLOW_LOCAL_STORAGE=true."
+    );
+  }
 }
 
 if (errors.length > 0) {
