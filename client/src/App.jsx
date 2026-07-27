@@ -65,9 +65,52 @@ import ShopperSignupPage from "./pages/ShopperSignupPage.jsx";
 import StoreSettingsPage from "./pages/StoreSettingsPage.jsx";
 import TrackingPage from "./pages/TrackingPage.jsx";
 
+// The seller/admin dashboard route subtree. Shared between the platform host
+// and storefront hosts so the same dashboard is reachable in both places.
+// `loginPath` is where ProtectedRoute sends unauthenticated users — "/login"
+// on the platform, "/admin" on a storefront host (where "/login" is the
+// shopper login).
+function dashboardRouteTree(loginPath) {
+  return (
+    <Route
+      path="/dashboard"
+      element={
+        <ProtectedRoute loginPath={loginPath}>
+          <DashboardLayout />
+        </ProtectedRoute>
+      }
+    >
+      <Route index element={<DashboardOverviewPage />} />
+      <Route path="products" element={<ProductsListPage />} />
+      <Route path="products/new" element={<ProductFormPage mode="create" />} />
+      <Route path="products/:id/edit" element={<ProductFormPage mode="edit" />} />
+      <Route path="pos" element={<POSPage />} />
+      <Route path="orders" element={<OrdersListPage />} />
+      <Route path="orders/:id" element={<OrderDetailPage />} />
+      <Route path="customers" element={<CustomersListPage />} />
+      <Route path="customers/:id" element={<CustomerDetailPage />} />
+      <Route path="inventory" element={<InventoryPage />} />
+      <Route path="categories" element={<CategoriesPage />} />
+      <Route path="delivery" element={<DeliveryPage />} />
+      <Route path="admin/accounts" element={<AdminAccountsPage />} />
+      <Route path="admin/domains" element={<AdminDomainsPage />} />
+      <Route path="admin/settings" element={<AdminSettingsPage />} />
+      <Route path="reports" element={<DashboardPlaceholderPage title="Reports" />} />
+      <Route path="storefront" element={<DashboardPlaceholderPage title="Storefront" />} />
+      <Route path="settings" element={<StoreSettingsPage />} />
+    </Route>
+  );
+}
+
 function StorefrontApp({ slug }) {
   return (
     <Routes>
+      {/* Seller/admin console on the storefront host: /admin → login, then
+          the shared /dashboard tree. Lets a store be managed at
+          e.g. ayaale.com/admin without a separate admin subdomain. */}
+      <Route path="/admin" element={<LoginPage />} />
+      {dashboardRouteTree("/admin")}
+
       <Route path="/" element={<PublicStorefrontPage slug={slug} />} />
       <Route
         path="/product/:productId"
@@ -136,45 +179,7 @@ function App() {
       <Route path="/store/:slug/reset-password" element={<StoreScopedShopperResetPassword />} />
       <Route path="/store/:slug/verify-email" element={<StoreScopedShopperVerifyEmail />} />
       <Route path="/store/:slug/account" element={<StoreScopedShopperAccount />} />
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute>
-            <DashboardLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<DashboardOverviewPage />} />
-        <Route path="products" element={<ProductsListPage />} />
-        <Route
-          path="products/new"
-          element={<ProductFormPage mode="create" />}
-        />
-        <Route
-          path="products/:id/edit"
-          element={<ProductFormPage mode="edit" />}
-        />
-        <Route path="pos" element={<POSPage />} />
-        <Route path="orders" element={<OrdersListPage />} />
-        <Route path="orders/:id" element={<OrderDetailPage />} />
-        <Route path="customers" element={<CustomersListPage />} />
-        <Route path="customers/:id" element={<CustomerDetailPage />} />
-        <Route path="inventory" element={<InventoryPage />} />
-        <Route path="categories" element={<CategoriesPage />} />
-        <Route path="delivery" element={<DeliveryPage />} />
-        <Route path="admin/accounts" element={<AdminAccountsPage />} />
-        <Route path="admin/domains" element={<AdminDomainsPage />} />
-        <Route path="admin/settings" element={<AdminSettingsPage />} />
-        <Route
-          path="reports"
-          element={<DashboardPlaceholderPage title="Reports" />}
-        />
-        <Route
-          path="storefront"
-          element={<DashboardPlaceholderPage title="Storefront" />}
-        />
-        <Route path="settings" element={<StoreSettingsPage />} />
-      </Route>
+      {dashboardRouteTree("/login")}
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
