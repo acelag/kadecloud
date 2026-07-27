@@ -41,9 +41,10 @@ function parseDataUrl(dataUrl) {
 
 router.use(requireAuth, requireStoreUser);
 
-router.post(
-  "/product-image",
-  asyncHandler(async (req, res) => {
+// Shared handler: validate a base64 data URL, store it under `folder`, and
+// return the public URL. Used for both product images and store logos.
+function imageUploadHandler(folder) {
+  return asyncHandler(async (req, res) => {
     const { contentType, base64 } = parseDataUrl(req.body.data_url);
     const extension = allowedTypes[contentType];
 
@@ -64,13 +65,16 @@ router.post(
     }
 
     const filename = `${Date.now()}-${crypto.randomUUID()}.${extension}`;
-    const key = `products/${filename}`;
+    const key = `${folder}/${filename}`;
 
     const result = await storage.put(key, buffer, { contentType });
     const imageUrl = result.url || storage.publicUrl(key, req);
 
     return res.status(201).json({ image_url: imageUrl });
-  })
-);
+  });
+}
+
+router.post("/product-image", imageUploadHandler("products"));
+router.post("/logo", imageUploadHandler("logos"));
 
 export default router;

@@ -182,6 +182,12 @@ export const uploadsApi = {
       method: "POST",
       body: JSON.stringify(payload)
     });
+  },
+  logo(payload) {
+    return apiRequest("/uploads/logo", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
   }
 };
 

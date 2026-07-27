@@ -13,11 +13,12 @@ import {
   ScanBarcode,
   Store,
   Unlink,
+  Upload,
   User
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { storesApi } from "../api/client.js";
+import { storesApi, uploadsApi } from "../api/client.js";
 import StatusBadge from "../components/dashboard/StatusBadge.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useCurrency } from "../context/CurrencyContext.jsx";
@@ -93,6 +94,7 @@ function StoreSettingsPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState([]);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   function applyStore(nextStore) {
     const merged = {
@@ -153,6 +155,42 @@ function StoreSettingsPage() {
       ...current,
       [name]: type === "checkbox" ? checked : value
     }));
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error("Unable to read image file"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function uploadLogo(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+
+    setError("");
+    setMessage("");
+    setFieldErrors([]);
+    setUploadingLogo(true);
+
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      const data = await uploadsApi.logo({
+        data_url: dataUrl,
+        file_name: file.name
+      });
+      setStore((current) => ({ ...current, logo_url: data.image_url }));
+      setMessage("Logo uploaded — remember to save your changes");
+    } catch (err) {
+      setError(err.message || "Unable to upload logo");
+    } finally {
+      setUploadingLogo(false);
+    }
   }
 
   function updateCatalog(event) {
@@ -412,18 +450,66 @@ function StoreSettingsPage() {
                 />
               </label>
 
-              <label className="sm:col-span-2">
+              <div className="sm:col-span-2">
                 <span className="text-sm font-semibold text-slate-700">
-                  Logo URL
+                  Logo
                 </span>
+                <div className="mt-1 flex items-center gap-4">
+                  {store.logo_url ? (
+                    <img
+                      src={store.logo_url}
+                      alt={`${store.name || "Store"} logo`}
+                      className="h-16 w-16 shrink-0 rounded-md border border-slate-200 object-cover"
+                      onError={(event) => {
+                        event.currentTarget.style.visibility = "hidden";
+                      }}
+                    />
+                  ) : (
+                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md border border-dashed border-slate-300 text-slate-400">
+                      <Store aria-hidden="true" size={22} />
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+                        <Upload aria-hidden="true" size={16} />
+                        {uploadingLogo ? "Uploading..." : "Upload from device"}
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          onChange={uploadLogo}
+                          disabled={uploadingLogo}
+                          className="hidden"
+                        />
+                      </label>
+                      {store.logo_url ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setStore((current) => ({
+                              ...current,
+                              logo_url: ""
+                            }))
+                          }
+                          className="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+                        >
+                          Remove
+                        </button>
+                      ) : null}
+                    </div>
+                    <span className="text-xs text-slate-500">
+                      JPG, PNG, or WebP · up to 5MB
+                    </span>
+                  </div>
+                </div>
                 <input
                   name="logo_url"
                   value={store.logo_url || ""}
                   onChange={updateStore}
-                  className="mt-1 h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                  placeholder="https://example.com/logo.png"
+                  className="mt-3 h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                  placeholder="…or paste an image URL: https://example.com/logo.png"
                 />
-              </label>
+              </div>
 
               <label className="sm:col-span-2">
                 <span className="text-sm font-semibold text-slate-700">
