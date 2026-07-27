@@ -9,6 +9,7 @@ import HoverCarousel from "../components/storefront/HoverCarousel.jsx";
 import ShopperHeaderMenu from "../components/storefront/ShopperHeaderMenu.jsx";
 import { useCart } from "../context/CartContext.jsx";
 import { useCurrency } from "../context/CurrencyContext.jsx";
+import { setFavicon } from "../utils/favicon.js";
 
 // Static class lookups so Tailwind JIT picks them up at build time.
 const PRODUCT_GRID_COLUMNS = {
@@ -53,6 +54,11 @@ function PublicStorefrontPage({ slug: slugProp } = {}) {
     setStoreCurrency(store?.default_currency || null);
     return () => setStoreCurrency(null);
   }, [store?.default_currency, setStoreCurrency]);
+
+  // Brand the storefront browser tab with the store's favicon, when set.
+  useEffect(() => {
+    setFavicon(store?.favicon_url);
+  }, [store?.favicon_url]);
 
   useEffect(() => {
     let isMounted = true;

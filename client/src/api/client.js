@@ -188,6 +188,12 @@ export const uploadsApi = {
       method: "POST",
       body: JSON.stringify(payload)
     });
+  },
+  favicon(payload) {
+    return apiRequest("/uploads/favicon", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
   }
 };
 

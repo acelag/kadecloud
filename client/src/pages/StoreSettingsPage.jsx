@@ -32,6 +32,7 @@ const emptyStore = {
   city: "",
   district: "",
   logo_url: "",
+  favicon_url: "",
   default_currency: "LKR",
   storefront_card_aspect: "4:3",
   storefront_products_per_row: 3,
@@ -95,6 +96,7 @@ function StoreSettingsPage() {
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState([]);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingFavicon, setUploadingFavicon] = useState(false);
 
   function applyStore(nextStore) {
     const merged = {
@@ -190,6 +192,33 @@ function StoreSettingsPage() {
       setError(err.message || "Unable to upload logo");
     } finally {
       setUploadingLogo(false);
+    }
+  }
+
+  async function uploadFavicon(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+
+    setError("");
+    setMessage("");
+    setFieldErrors([]);
+    setUploadingFavicon(true);
+
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      const data = await uploadsApi.favicon({
+        data_url: dataUrl,
+        file_name: file.name
+      });
+      setStore((current) => ({ ...current, favicon_url: data.image_url }));
+      setMessage("Favicon uploaded — remember to save your changes");
+    } catch (err) {
+      setError(err.message || "Unable to upload favicon");
+    } finally {
+      setUploadingFavicon(false);
     }
   }
 
@@ -509,6 +538,55 @@ function StoreSettingsPage() {
                   className="mt-3 h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                   placeholder="…or paste an image URL: https://example.com/logo.png"
                 />
+              </div>
+
+              <div className="sm:col-span-2">
+                <span className="text-sm font-semibold text-slate-700">
+                  Favicon
+                </span>
+                <p className="text-xs text-slate-500">
+                  The small icon shown in the browser tab for your storefront.
+                </p>
+                <div className="mt-1 flex items-center gap-4">
+                  {store.favicon_url ? (
+                    <img
+                      src={store.favicon_url}
+                      alt="Favicon"
+                      className="h-10 w-10 shrink-0 rounded-md border border-slate-200 object-contain"
+                      onError={(event) => {
+                        event.currentTarget.style.visibility = "hidden";
+                      }}
+                    />
+                  ) : (
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-dashed border-slate-300 text-slate-400">
+                      <Globe aria-hidden="true" size={18} />
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+                      <Upload aria-hidden="true" size={16} />
+                      {uploadingFavicon ? "Uploading..." : "Upload from device"}
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        onChange={uploadFavicon}
+                        disabled={uploadingFavicon}
+                        className="hidden"
+                      />
+                    </label>
+                    {store.favicon_url ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setStore((current) => ({ ...current, favicon_url: "" }))
+                        }
+                        className="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+                      >
+                        Remove
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
               </div>
 
               <label className="sm:col-span-2">

@@ -194,7 +194,8 @@ router.post(
         stores.slug AS store_slug, stores.category AS store_category,
         stores.phone AS store_phone, stores.whatsapp_phone AS store_whatsapp_phone,
         stores.address AS store_address, stores.city AS store_city,
-        stores.district AS store_district, stores.logo_url AS store_logo_url
+        stores.district AS store_district, stores.logo_url AS store_logo_url,
+        stores.favicon_url AS store_favicon_url
       FROM users
       LEFT JOIN stores ON stores.id = users.store_id OR stores.seller_id = users.id
       WHERE users.email = $1`,
@@ -226,7 +227,8 @@ router.post(
           address:        user.store_address,
           city:           user.store_city,
           district:       user.store_district,
-          logo_url:       user.store_logo_url
+          logo_url:       user.store_logo_url,
+          favicon_url:    user.store_favicon_url
         }
       : null;
 
@@ -248,7 +250,8 @@ router.get(
         stores.slug AS store_slug, stores.category AS store_category,
         stores.phone AS store_phone, stores.whatsapp_phone AS store_whatsapp_phone,
         stores.address AS store_address, stores.city AS store_city,
-        stores.district AS store_district, stores.logo_url AS store_logo_url
+        stores.district AS store_district, stores.logo_url AS store_logo_url,
+        stores.favicon_url AS store_favicon_url
       FROM users
       LEFT JOIN stores ON stores.id = users.store_id OR stores.seller_id = users.id
       WHERE users.id = $1`,
@@ -271,7 +274,8 @@ router.get(
           address:        user.store_address,
           city:           user.store_city,
           district:       user.store_district,
-          logo_url:       user.store_logo_url
+          logo_url:       user.store_logo_url,
+          favicon_url:    user.store_favicon_url
         }
       : null;
 

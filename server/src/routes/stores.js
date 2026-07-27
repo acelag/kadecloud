@@ -76,6 +76,7 @@ function normalizeStoreBody(body) {
     city: String(body.city || "").trim() || null,
     district: String(body.district || "").trim() || null,
     logo_url: String(body.logo_url || "").trim() || null,
+    favicon_url: String(body.favicon_url || "").trim() || null,
     default_currency: defaultCurrencyRaw || null,
     storefront_card_aspect: aspectRaw || null,
     storefront_products_per_row: perRow,
@@ -241,6 +242,7 @@ function storeSelectSql() {
     city,
     district,
     logo_url,
+    favicon_url,
     is_active,
     meta_catalog_id,
     meta_currency,
@@ -333,6 +335,7 @@ router.put(
         city = $6,
         district = $7,
         logo_url = $8,
+        favicon_url = $30,
         default_currency = COALESCE($9, default_currency),
         storefront_card_aspect = COALESCE($11, storefront_card_aspect),
         storefront_products_per_row = COALESCE($12, storefront_products_per_row),
@@ -363,6 +366,7 @@ router.put(
         city,
         district,
         logo_url,
+        favicon_url,
         is_active,
         meta_catalog_id,
         meta_currency,
@@ -416,7 +420,8 @@ router.put(
         values.announcement_text ?? null,
         values.payhere_enabled,
         values.admin_domain_provided,
-        values.admin_domain ?? null
+        values.admin_domain ?? null,
+        values.favicon_url
       ]
     );
     } catch (err) {

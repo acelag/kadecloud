@@ -232,6 +232,7 @@ async function getPublicStore(slug) {
       city,
       district,
       logo_url,
+      favicon_url,
       default_currency,
       storefront_card_aspect,
       storefront_products_per_row,

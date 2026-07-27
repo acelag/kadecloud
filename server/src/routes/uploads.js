@@ -76,5 +76,6 @@ function imageUploadHandler(folder) {
 
 router.post("/product-image", imageUploadHandler("products"));
 router.post("/logo", imageUploadHandler("logos"));
+router.post("/favicon", imageUploadHandler("favicons"));
 
 export default router;
