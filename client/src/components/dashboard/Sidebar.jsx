@@ -73,24 +73,26 @@ function Sidebar({ isOpen, onClose }) {
         <div className="flex h-16 items-center justify-between border-b border-slate-200 px-5">
           <div className="flex min-w-0 items-center gap-3">
             {logoUrl ? (
+              // With a logo, show it larger on its own — the logo is the brand.
               <img
                 src={logoUrl}
-                alt={`${brandName} logo`}
-                className="h-9 w-9 shrink-0 rounded-md object-cover"
+                alt={brandName}
+                className="h-12 w-auto max-w-[190px] shrink-0 object-contain"
               />
-            ) : null}
-            <div className="min-w-0">
-              <p className="truncate text-lg font-bold text-slate-950">
-                {brandName}
-              </p>
-              <p className="truncate text-xs font-medium text-slate-500">
-                {isAdmin
-                  ? "Super admin"
-                  : isStoreAdmin
-                    ? "Store admin console"
-                    : "Seller console"}
-              </p>
-            </div>
+            ) : (
+              <div className="min-w-0">
+                <p className="truncate text-lg font-bold text-slate-950">
+                  {brandName}
+                </p>
+                <p className="truncate text-xs font-medium text-slate-500">
+                  {isAdmin
+                    ? "Super admin"
+                    : isStoreAdmin
+                      ? "Store admin console"
+                      : "Seller console"}
+                </p>
+              </div>
+            )}
           </div>
           <button
             type="button"
