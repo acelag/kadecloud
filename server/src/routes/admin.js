@@ -459,6 +459,70 @@ router.post(
   })
 );
 
+// Set a new password for a store account. Admins never see the old password
+// (they can't — it's a one-way bcrypt hash); this simply overwrites it with a
+// new one they can hand to the user. Scope matches login-as: store accounts
+// only, and store admins are limited to sellers in their own store.
+router.post(
+  "/accounts/:id/password",
+  asyncHandler(async (req, res) => {
+    const password = String(req.body.password || "");
+
+    if (!password) {
+      return res.status(400).json({ message: "Password is required" });
+    }
+    if (password.length < 8) {
+      return res.status(400).json({
+        message: "Validation failed",
+        errors: ["Password must be at least 8 characters"]
+      });
+    }
+
+    const result = await query(
+      `SELECT id, role, store_id AS user_store_id
+       FROM users
+       WHERE id = $1
+       LIMIT 1`,
+      [req.params.id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: "Account was not found" });
+    }
+
+    const account = result.rows[0];
+
+    if (!["store_admin", "seller"].includes(account.role)) {
+      return res.status(400).json({
+        message: "Passwords can only be set for store accounts"
+      });
+    }
+
+    if (req.user.role === "store_admin") {
+      const store = await getUserStore(req.user.id);
+      if (account.role !== "seller" || account.user_store_id !== store.id) {
+        return res.status(403).json({
+          message: "You can only set passwords for sellers in your store"
+        });
+      }
+    }
+
+    const passwordHash = await bcrypt.hash(password, saltRounds);
+
+    // Overwrite the hash and void any outstanding reset link for this account.
+    await query(
+      `UPDATE users
+         SET password_hash = $1,
+             password_reset_token = NULL,
+             password_reset_expires = NULL
+       WHERE id = $2`,
+      [passwordHash, account.id]
+    );
+
+    return res.status(200).json({ message: "Password updated" });
+  })
+);
+
 router.get(
   "/settings",
   requirePlatformAdmin,

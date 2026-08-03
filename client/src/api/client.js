@@ -272,6 +272,12 @@ export const adminApi = {
       method: "POST"
     });
   },
+  setAccountPassword(accountId, password) {
+    return apiRequest(`/admin/accounts/${accountId}/password`, {
+      method: "POST",
+      body: JSON.stringify({ password })
+    });
+  },
   getSettings() {
     return apiRequest("/admin/settings");
   },

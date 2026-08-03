@@ -1,4 +1,4 @@
-import { LogIn, Plus, Shield } from "lucide-react";
+import { KeyRound, LogIn, Plus, Shield, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { adminApi } from "../api/client.js";
@@ -47,6 +47,10 @@ function AdminAccountsPage() {
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState([]);
   const [message, setMessage] = useState("");
+  const [passwordTarget, setPasswordTarget] = useState(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
 
   async function loadAccounts() {
     setLoading(true);
@@ -126,6 +130,41 @@ function AdminAccountsPage() {
       setError(err.message || "Unable to log in as this account");
     } finally {
       setActingId("");
+    }
+  }
+
+  function openPasswordModal(account) {
+    setPasswordTarget(account);
+    setNewPassword("");
+    setPasswordError("");
+  }
+
+  function closePasswordModal() {
+    setPasswordTarget(null);
+    setNewPassword("");
+    setPasswordError("");
+  }
+
+  async function submitPassword(event) {
+    event.preventDefault();
+    if (newPassword.length < 8) {
+      setPasswordError("Password must be at least 8 characters");
+      return;
+    }
+
+    setSavingPassword(true);
+    setPasswordError("");
+
+    try {
+      await adminApi.setAccountPassword(passwordTarget.id, newPassword);
+      setMessage(`Password updated for ${passwordTarget.name}`);
+      closePasswordModal();
+    } catch (err) {
+      setPasswordError(
+        (err.errors && err.errors[0]) || err.message || "Unable to set password"
+      );
+    } finally {
+      setSavingPassword(false);
     }
   }
 
@@ -377,7 +416,7 @@ function AdminAccountsPage() {
               {accounts.map((account) => (
                 <article
                   key={account.id}
-                  className="grid gap-4 p-4 lg:grid-cols-[1fr_160px_170px_120px] lg:items-center"
+                  className="grid gap-4 p-4 lg:grid-cols-[1fr_160px_170px_150px] lg:items-center"
                 >
                   <div>
                     <p className="font-bold text-slate-950">{account.name}</p>
@@ -418,17 +457,28 @@ function AdminAccountsPage() {
                     Created {formatDate(account.created_at)}
                   </p>
 
-                  {["store_admin", "seller"].includes(account.role) &&
-                  user?.role === "platform_admin" ? (
-                    <button
-                      type="button"
-                      onClick={() => loginAs(account.id)}
-                      disabled={actingId === account.id}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <LogIn aria-hidden="true" size={17} />
-                      {actingId === account.id ? "Opening..." : "Log in as"}
-                    </button>
+                  {["store_admin", "seller"].includes(account.role) ? (
+                    <div className="flex flex-col gap-2">
+                      {user?.role === "platform_admin" ? (
+                        <button
+                          type="button"
+                          onClick={() => loginAs(account.id)}
+                          disabled={actingId === account.id}
+                          className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <LogIn aria-hidden="true" size={17} />
+                          {actingId === account.id ? "Opening..." : "Log in as"}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => openPasswordModal(account)}
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                      >
+                        <KeyRound aria-hidden="true" size={17} />
+                        Set password
+                      </button>
+                    </div>
                   ) : (
                     <span className="text-sm text-slate-400">
                       {user?.role === "platform_admin"
@@ -442,6 +492,81 @@ function AdminAccountsPage() {
           )}
         </section>
       </section>
+
+      {passwordTarget ? (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 p-4"
+          onClick={closePasswordModal}
+        >
+          <form
+            onSubmit={submitPassword}
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-xl"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">
+                  <KeyRound aria-hidden="true" size={20} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold">Set new password</h3>
+                  <p className="text-sm text-slate-500">
+                    {passwordTarget.name} · {passwordTarget.email}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closePasswordModal}
+                className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                aria-label="Close"
+              >
+                <X aria-hidden="true" size={20} />
+              </button>
+            </div>
+
+            <label className="mt-5 block">
+              <span className="text-sm font-semibold text-slate-700">
+                New password
+              </span>
+              <input
+                type="text"
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+                autoFocus
+                className="mt-1 h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                placeholder="At least 8 characters"
+              />
+              <span className="mt-1 block text-xs text-slate-500">
+                The account holder will use this to sign in. Share it with them
+                securely — it replaces their current password immediately.
+              </span>
+            </label>
+
+            {passwordError ? (
+              <p className="mt-3 text-sm text-red-600">{passwordError}</p>
+            ) : null}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closePasswordModal}
+                className="inline-flex h-11 items-center justify-center rounded-md border border-slate-300 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={savingPassword}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <KeyRound aria-hidden="true" size={18} />
+                {savingPassword ? "Saving..." : "Set password"}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </div>
   );
 }
