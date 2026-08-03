@@ -198,6 +198,9 @@ export const uploadsApi = {
 };
 
 export const ordersApi = {
+  stats() {
+    return apiRequest("/orders/stats");
+  },
   list() {
     return apiRequest("/orders");
   },

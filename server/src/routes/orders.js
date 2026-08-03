@@ -248,6 +248,100 @@ router.get(
   })
 );
 
+// Real dashboard metrics for the signed-in store. Day/week/month boundaries
+// use Sri Lanka local time (Asia/Colombo) since that's the target market.
+// A brand-new store naturally returns zeros and an empty queue.
+const LOCAL_TZ = "Asia/Colombo";
+
+router.get(
+  "/stats",
+  asyncHandler(async (req, res) => {
+    const store = await getUserStore(req.user.id);
+
+    const totalsResult = await query(
+      `SELECT
+        COUNT(*) FILTER (
+          WHERE (created_at AT TIME ZONE $2)::date = (now() AT TIME ZONE $2)::date
+        )::int AS today_orders,
+        COUNT(*) FILTER (
+          WHERE (created_at AT TIME ZONE $2)::date = (now() AT TIME ZONE $2)::date - 1
+        )::int AS yesterday_orders,
+        COUNT(*) FILTER (
+          WHERE payment_method = 'cod'
+            AND cod_status = 'not_verified'
+            AND status NOT IN ('delivered', 'cancelled', 'rejected', 'returned')
+        )::int AS pending_cod,
+        COUNT(*) FILTER (
+          WHERE status = 'delivered'
+            AND (created_at AT TIME ZONE $2) >= date_trunc('week', now() AT TIME ZONE $2)
+        )::int AS delivered_week,
+        COUNT(*) FILTER (
+          WHERE status IN ('returned', 'rejected')
+        )::int AS returned_rejected,
+        COALESCE(SUM(total_amount) FILTER (
+          WHERE status = 'delivered'
+            AND (created_at AT TIME ZONE $2) >= date_trunc('month', now() AT TIME ZONE $2)
+        ), 0) AS sales_month
+      FROM orders
+      WHERE store_id = $1`,
+      [store.id, LOCAL_TZ]
+    );
+
+    const lowStockResult = await query(
+      `SELECT COUNT(*)::int AS low_stock
+       FROM products
+       WHERE store_id = $1
+         AND low_stock_threshold > 0
+         AND stock_quantity <= low_stock_threshold`,
+      [store.id]
+    );
+
+    const queueResult = await query(
+      `SELECT
+        orders.order_number,
+        orders.customer_name,
+        orders.total_amount,
+        orders.cod_status,
+        customers.risk_status AS customer_risk_status
+       FROM orders
+       LEFT JOIN customers ON customers.id = orders.customer_id
+       WHERE orders.store_id = $1
+         AND orders.payment_method = 'cod'
+         AND orders.cod_status = 'not_verified'
+         AND orders.status NOT IN ('delivered', 'cancelled', 'rejected', 'returned')
+       ORDER BY orders.created_at DESC
+       LIMIT 6`,
+      [store.id]
+    );
+
+    const totals = totalsResult.rows[0];
+    const todayOrders = totals.today_orders;
+    const yesterdayOrders = totals.yesterday_orders;
+    const dayDelta = todayOrders - yesterdayOrders;
+
+    const codQueue = queueResult.rows.map((row) => ({
+      order: row.order_number,
+      customer: row.customer_name || "Guest",
+      amount: Number(row.total_amount),
+      status: row.customer_risk_status === "high_risk" ? "High risk" : "Pending COD",
+      tone: row.customer_risk_status === "high_risk" ? "danger" : "warning"
+    }));
+
+    return res.status(200).json({
+      stats: {
+        today_orders: todayOrders,
+        today_delta: dayDelta,
+        pending_cod: totals.pending_cod,
+        delivered_week: totals.delivered_week,
+        returned_rejected: totals.returned_rejected,
+        sales_month: Number(totals.sales_month),
+        low_stock: lowStockResult.rows[0].low_stock
+      },
+      cod_queue: codQueue
+    });
+  })
+);
+
 router.get(
   "/:id",
   asyncHandler(async (req, res) => {
