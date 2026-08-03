@@ -1,34 +1,6 @@
-import { Shield, ShoppingBag, User } from "lucide-react";
 import { useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
-
-const DEMO_ACCOUNTS = [
-  {
-    role: "Super admin",
-    email: "admin@example.com",
-    password: "Password123",
-    description: "Manage every store and impersonate accounts.",
-    icon: Shield,
-    tone: "bg-rose-50 text-rose-700"
-  },
-  {
-    role: "Store admin",
-    email: "aselagamlath@gmail.com",
-    password: "Password123",
-    description: "Owns kade Fashion — products, orders, POS, settings.",
-    icon: User,
-    tone: "bg-emerald-50 text-emerald-700"
-  },
-  {
-    role: "Seller",
-    email: "seller@example.com",
-    password: "Password123",
-    description: "Staff seat — sells at POS, processes orders.",
-    icon: ShoppingBag,
-    tone: "bg-sky-50 text-sky-700"
-  }
-];
 
 function LoginPage() {
   const { isAuthenticated, login } = useAuth();
@@ -67,12 +39,6 @@ function LoginPage() {
     }
   }
 
-  async function useDemoAccount(account) {
-    const credentials = { email: account.email, password: account.password };
-    setForm(credentials);
-    await submitCredentials(credentials);
-  }
-
   async function handleSubmit(event) {
     event.preventDefault();
     await submitCredentials(form);
@@ -93,51 +59,6 @@ function LoginPage() {
             store workspace.
           </p>
 
-          <div className="mt-8 rounded-lg border border-slate-800 bg-slate-900/60 p-5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300">
-              Demo accounts
-            </p>
-            <p className="mt-1 text-sm text-slate-400">
-              One-click login. Password for all three:{" "}
-              <span className="font-mono text-slate-200">Password123</span>
-            </p>
-            <div className="mt-4 grid gap-2">
-              {DEMO_ACCOUNTS.map((account) => {
-                const Icon = account.icon;
-                return (
-                  <button
-                    key={account.email}
-                    type="button"
-                    onClick={() => useDemoAccount(account)}
-                    disabled={isSubmitting}
-                    className="group flex items-start gap-3 rounded-md border border-slate-800 bg-slate-950/60 p-3 text-left transition hover:border-emerald-500 hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <span
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md ${account.tone}`}
-                    >
-                      <Icon aria-hidden="true" size={18} />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-bold text-white">
-                          {account.role}
-                        </span>
-                        <span className="text-xs font-semibold text-emerald-300 transition group-hover:text-emerald-200">
-                          Sign in →
-                        </span>
-                      </span>
-                      <span className="mt-0.5 block truncate font-mono text-xs text-slate-300">
-                        {account.email}
-                      </span>
-                      <span className="mt-1 block text-xs leading-5 text-slate-400">
-                        {account.description}
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
         </div>
 
         <form
