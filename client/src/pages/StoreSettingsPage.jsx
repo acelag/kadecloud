@@ -390,16 +390,6 @@ function StoreSettingsPage() {
                   {storefrontUrl || `/${store.slug}`}
                 </p>
               </div>
-              {store.logo_url ? (
-                <img
-                  src={store.logo_url}
-                  alt={`${store.name} logo`}
-                  className="ml-3 h-10 w-10 shrink-0 rounded-md border border-slate-200 object-cover"
-                  onError={(event) => {
-                    event.currentTarget.style.display = "none";
-                  }}
-                />
-              ) : null}
             </div>
             <div className="flex gap-2">
               <button
