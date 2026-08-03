@@ -39,6 +39,8 @@ function PublicStorefrontPage({ slug: slugProp } = {}) {
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [inStockOnly, setInStockOnly] = useState(false);
+  const [size, setSize] = useState("");
+  const [availableSizes, setAvailableSizes] = useState([]);
   const [sort, setSort] = useState("newest");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -46,6 +48,7 @@ function PublicStorefrontPage({ slug: slugProp } = {}) {
     Boolean(categoryId) ||
     Boolean(minPrice) ||
     Boolean(maxPrice) ||
+    Boolean(size) ||
     inStockOnly ||
     sort !== "newest";
 
@@ -54,6 +57,7 @@ function PublicStorefrontPage({ slug: slugProp } = {}) {
     setMinPrice("");
     setMaxPrice("");
     setInStockOnly(false);
+    setSize("");
     setSort("newest");
   }
   const { formatFromSource, setStoreCurrency } = useCurrency();
@@ -110,12 +114,14 @@ function PublicStorefrontPage({ slug: slugProp } = {}) {
           min_price: minPrice,
           max_price: maxPrice,
           in_stock: inStockOnly ? "true" : "",
+          size,
           sort
         });
 
         if (isMounted) {
           setStore(data.store);
           setProducts(data.products || []);
+          setAvailableSizes(data.available_sizes || []);
         }
       } catch (err) {
         if (isMounted) {
@@ -134,7 +140,7 @@ function PublicStorefrontPage({ slug: slugProp } = {}) {
       isMounted = false;
       window.clearTimeout(timeoutId);
     };
-  }, [slug, search, categoryId, minPrice, maxPrice, inStockOnly, sort]);
+  }, [slug, search, categoryId, minPrice, maxPrice, inStockOnly, size, sort]);
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-950">
@@ -281,6 +287,33 @@ function PublicStorefrontPage({ slug: slugProp } = {}) {
                   />
                 </div>
               </div>
+
+              {availableSizes.length > 0 ? (
+                <div className="mt-5 border-t border-slate-100 pt-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Size
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {availableSizes.map((label) => {
+                      const active = size === label;
+                      return (
+                        <button
+                          key={label}
+                          type="button"
+                          onClick={() => setSize(active ? "" : label)}
+                          className={`inline-flex h-9 min-w-[2.5rem] items-center justify-center rounded-md border px-2.5 text-sm font-semibold transition ${
+                            active
+                              ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                              : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
 
               <div className="mt-5 border-t border-slate-100 pt-4">
                 <label className="flex items-center gap-2 text-sm font-medium text-slate-700">

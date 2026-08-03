@@ -70,6 +70,40 @@ function normalizeImages(value) {
   return cleaned;
 }
 
+const MAX_SIZES = 30;
+const MAX_SIZE_LABEL = 60;
+
+// Sizes are stored as product_variants rows (name = size label). Normalize the
+// incoming [{label, quantity}] list: trim labels, dedupe case-insensitively,
+// clamp quantities to non-negative integers. Returns null when the caller did
+// not send a `sizes` field at all (so we leave existing sizes untouched), or an
+// array (possibly empty, meaning "this product has no sizes").
+function normalizeSizes(value) {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const cleaned = [];
+  const seen = new Set();
+
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") continue;
+    const label = String(entry.label ?? entry.name ?? "").trim();
+    if (!label) continue;
+    const key = label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const qty = Number.parseInt(entry.quantity ?? entry.stock_quantity ?? 0, 10);
+    cleaned.push({
+      label: label.slice(0, MAX_SIZE_LABEL),
+      quantity: Number.isInteger(qty) && qty > 0 ? qty : 0
+    });
+  }
+
+  return cleaned.slice(0, MAX_SIZES);
+}
+
 const MAX_ATTRIBUTES = 30;
 const MAX_ATTRIBUTE_LABEL = 100;
 const MAX_ATTRIBUTE_VALUE = 500;
@@ -106,6 +140,7 @@ function validateProductBody(body) {
   const name = String(body.name || "").trim();
   const images = normalizeImages(body.images);
   const attributes = normalizeAttributes(body.attributes);
+  const sizes = normalizeSizes(body.sizes);
 
   if (!name) {
     errors.push("Product name is required");
@@ -157,7 +192,8 @@ function validateProductBody(body) {
       cod_available: toBoolean(body.cod_available, true),
       is_active: toBoolean(body.is_active, true),
       images,
-      attributes
+      attributes,
+      sizes
     }
   };
 }
@@ -206,6 +242,90 @@ async function replaceProductImages(productId, images) {
   );
 
   return images;
+}
+
+// Return a product's sizes for the admin editor: id + label + quantity, in the
+// seller-defined order. Only active rows (soft-removed sizes stay hidden).
+async function fetchProductSizes(productId) {
+  const result = await query(
+    `SELECT id, name AS label, stock_quantity AS quantity
+       FROM product_variants
+      WHERE product_id = $1 AND is_active = true
+      ORDER BY position ASC, name ASC`,
+    [productId]
+  );
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    label: row.label,
+    quantity: Number(row.quantity)
+  }));
+}
+
+// Reconcile a product's size rows with the submitted list. We match by label
+// (case-insensitive) and UPDATE in place so variant ids survive edits — this
+// matters because order_items reference product_variants with ON DELETE
+// RESTRICT. Sizes dropped from the list are deleted when unreferenced, or
+// soft-removed (is_active = false) when an order still points at them.
+async function syncProductSizes(productId, sizes, price) {
+  const existing = await query(
+    "SELECT id, name FROM product_variants WHERE product_id = $1",
+    [productId]
+  );
+  const byLabel = new Map(
+    existing.rows.map((row) => [row.name.toLowerCase(), row])
+  );
+  const keptIds = new Set();
+
+  for (let index = 0; index < sizes.length; index += 1) {
+    const size = sizes[index];
+    const match = byLabel.get(size.label.toLowerCase());
+
+    if (match) {
+      await query(
+        `UPDATE product_variants
+            SET name = $1, price = $2, stock_quantity = $3,
+                position = $4, is_active = true
+          WHERE id = $5`,
+        [size.label, price, size.quantity, index, match.id]
+      );
+      keptIds.add(match.id);
+    } else {
+      const inserted = await query(
+        `INSERT INTO product_variants
+            (product_id, name, price, stock_quantity, position)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id`,
+        [productId, size.label, price, size.quantity, index]
+      );
+      keptIds.add(inserted.rows[0].id);
+    }
+  }
+
+  for (const row of existing.rows) {
+    if (keptIds.has(row.id)) continue;
+
+    const referenced = await query(
+      "SELECT 1 FROM order_items WHERE product_variant_id = $1 LIMIT 1",
+      [row.id]
+    );
+
+    if (referenced.rowCount > 0) {
+      await query(
+        "UPDATE product_variants SET is_active = false, stock_quantity = 0 WHERE id = $1",
+        [row.id]
+      );
+    } else {
+      await query("DELETE FROM product_variants WHERE id = $1", [row.id]);
+    }
+  }
+}
+
+// When a product has sizes, its own stock_quantity mirrors the sum of the size
+// stocks so storefront in-stock checks, low-stock counts, and dashboards keep
+// working off the single products.stock_quantity column.
+function stockFromSizes(sizes) {
+  return sizes.reduce((sum, size) => sum + size.quantity, 0);
 }
 
 async function createUniqueProductSlug(storeId, name, excludedProductId = null) {
@@ -317,6 +437,11 @@ router.post(
     await assertCategoryBelongsToStore(store.id, values.category_id);
     const slug = await createUniqueProductSlug(store.id, values.name);
 
+    const hasSizes = Array.isArray(values.sizes) && values.sizes.length > 0;
+    const stockQuantity = hasSizes
+      ? stockFromSizes(values.sizes)
+      : values.stock_quantity;
+
     try {
       const insertResult = await query(
         `INSERT INTO products (
@@ -346,7 +471,7 @@ router.post(
           values.description,
           values.price,
           values.discount_price,
-          values.stock_quantity,
+          stockQuantity,
           values.low_stock_threshold,
           values.image_url,
           values.cod_available,
@@ -354,6 +479,10 @@ router.post(
           JSON.stringify(values.attributes || [])
         ]
       );
+
+      if (values.sizes !== null) {
+        await syncProductSizes(insertResult.rows[0].id, values.sizes, values.price);
+      }
 
       const reload = await query(
         `${productSelectSql()} WHERE products.id = $1`,
@@ -363,7 +492,8 @@ router.post(
       const images = values.images
         ? await replaceProductImages(createdProduct.id, values.images)
         : [];
-      const productWithImages = { ...createdProduct, images };
+      const sizes = await fetchProductSizes(createdProduct.id);
+      const productWithImages = { ...createdProduct, images, sizes };
 
       syncProductInBackground(store, productWithImages);
 
@@ -396,9 +526,10 @@ router.get(
     }
 
     const images = await fetchProductImages(req.params.id);
+    const sizes = await fetchProductSizes(req.params.id);
 
     res.status(200).json({
-      product: { ...result.rows[0], images }
+      product: { ...result.rows[0], images, sizes }
     });
   })
 );
@@ -434,7 +565,17 @@ router.put(
       req.params.id
     );
 
+    const hasSizes = Array.isArray(values.sizes) && values.sizes.length > 0;
+    const stockQuantity = hasSizes
+      ? stockFromSizes(values.sizes)
+      : values.stock_quantity;
+
     try {
+      // Sync sizes first so stock aggregation below reflects them.
+      if (values.sizes !== null) {
+        await syncProductSizes(req.params.id, values.sizes, values.price);
+      }
+
       const updateResult = await query(
         `UPDATE products
         SET
@@ -461,7 +602,7 @@ router.put(
           values.description,
           values.price,
           values.discount_price,
-          values.stock_quantity,
+          stockQuantity,
           values.low_stock_threshold,
           values.image_url,
           values.cod_available,
@@ -480,7 +621,8 @@ router.put(
       const images = values.images
         ? await replaceProductImages(updatedProduct.id, values.images)
         : await fetchProductImages(updatedProduct.id);
-      const productWithImages = { ...updatedProduct, images };
+      const sizes = await fetchProductSizes(updatedProduct.id);
+      const productWithImages = { ...updatedProduct, images, sizes };
 
       syncProductInBackground(store, productWithImages);
 

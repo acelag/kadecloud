@@ -56,6 +56,25 @@ function productSelectSql() {
   LEFT JOIN categories ON categories.id = products.category_id`;
 }
 
+// Public-facing sizes for a product: only active rows, in seller order, each
+// with its own stock so the storefront can gate quantity per size.
+async function fetchPublicSizes(productId) {
+  const result = await query(
+    `SELECT id, name AS label, stock_quantity
+       FROM product_variants
+      WHERE product_id = $1 AND is_active = true
+      ORDER BY position ASC, name ASC`,
+    [productId]
+  );
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    label: row.label,
+    stock_quantity: Number(row.stock_quantity),
+    in_stock: Number(row.stock_quantity) > 0
+  }));
+}
+
 function createHttpError(statusCode, message) {
   const error = new Error(message);
   error.statusCode = statusCode;
@@ -134,7 +153,11 @@ function normalizeOrderItems(body) {
       const productId = String(raw.product_id || "").trim();
       const qty = Number.parseInt(raw.quantity, 10);
       if (!productId) continue;
-      cleaned.push({ product_id: productId, quantity: qty });
+      cleaned.push({
+        product_id: productId,
+        product_variant_id: String(raw.product_variant_id || "").trim() || null,
+        quantity: qty
+      });
     }
     return cleaned;
   }
@@ -143,6 +166,8 @@ function normalizeOrderItems(body) {
     return [
       {
         product_id: String(body.product_id),
+        product_variant_id:
+          String(body.product_variant_id || "").trim() || null,
         quantity: toInteger(body.quantity, 1)
       }
     ];
@@ -569,6 +594,20 @@ router.get(
       where.push("products.stock_quantity > 0");
     }
 
+    // Size filter: products that have this size active and in stock.
+    if (req.query.size) {
+      params.push(String(req.query.size).trim());
+      where.push(
+        `EXISTS (
+          SELECT 1 FROM product_variants pv
+          WHERE pv.product_id = products.id
+            AND pv.is_active = true
+            AND pv.stock_quantity > 0
+            AND LOWER(pv.name) = LOWER($${params.length})
+        )`
+      );
+    }
+
     const sortOptions = {
       newest: "products.updated_at DESC",
       price_asc: "COALESCE(products.discount_price, products.price) ASC",
@@ -584,9 +623,25 @@ router.get(
       params
     );
 
+    // Distinct sizes across the store's active, in-stock products — powers the
+    // storefront size filter. Ordered by the seller's position, then label.
+    const sizesResult = await query(
+      `SELECT pv.name AS label, MIN(pv.position) AS pos
+         FROM product_variants pv
+         JOIN products p ON p.id = pv.product_id
+        WHERE p.store_id = $1
+          AND p.is_active = true
+          AND pv.is_active = true
+          AND pv.stock_quantity > 0
+        GROUP BY pv.name
+        ORDER BY pos ASC, label ASC`,
+      [store.id]
+    );
+
     return res.status(200).json({
       store,
-      products: result.rows
+      products: result.rows,
+      available_sizes: sizesResult.rows.map((row) => row.label)
     });
   })
 );
@@ -620,12 +675,14 @@ router.get(
        WHERE product_id = $1 ORDER BY position ASC`,
       [req.params.productId]
     );
+    const sizes = await fetchPublicSizes(req.params.productId);
 
     return res.status(200).json({
       store,
       product: {
         ...result.rows[0],
-        images: imagesResult.rows.map((row) => row.image_url)
+        images: imagesResult.rows.map((row) => row.image_url),
+        sizes
       }
     });
   })
@@ -698,13 +755,26 @@ router.post(
         );
       }
 
-      // Aggregate duplicate product_ids the client may have sent.
+      // Aggregate duplicate lines the client may have sent, keyed by product
+      // AND chosen size — the same product in two sizes stays two lines.
       const aggregated = new Map();
       for (const line of values.items) {
-        const existing = aggregated.get(line.product_id) || 0;
-        aggregated.set(line.product_id, existing + line.quantity);
+        const key = `${line.product_id}::${line.product_variant_id || ""}`;
+        const existing = aggregated.get(key);
+        if (existing) {
+          existing.quantity += line.quantity;
+        } else {
+          aggregated.set(key, {
+            product_id: line.product_id,
+            product_variant_id: line.product_variant_id || null,
+            quantity: line.quantity
+          });
+        }
       }
-      const productIds = Array.from(aggregated.keys());
+
+      const productIds = Array.from(
+        new Set(Array.from(aggregated.values()).map((line) => line.product_id))
+      );
 
       // Lock and load every product in one shot, ordered for deadlock safety.
       const productsResult = await client.query(
@@ -727,11 +797,29 @@ router.post(
       const productById = new Map(
         productsResult.rows.map((row) => [row.id, row])
       );
+
+      // Lock the active sizes for those products so stock checks are race-safe.
+      const variantsResult = await client.query(
+        `SELECT id, product_id, name, stock_quantity
+           FROM product_variants
+          WHERE product_id = ANY($1::uuid[]) AND is_active = true
+          ORDER BY id
+          FOR UPDATE`,
+        [productIds]
+      );
+      const variantById = new Map(
+        variantsResult.rows.map((row) => [row.id, row])
+      );
+      const productHasSizes = new Set(
+        variantsResult.rows.map((row) => row.product_id)
+      );
+
       const lineItems = [];
       let subtotal = 0;
 
-      for (const [productId, quantity] of aggregated.entries()) {
-        const product = productById.get(productId);
+      for (const line of aggregated.values()) {
+        const product = productById.get(line.product_id);
+        const { quantity } = line;
 
         if (!product.is_active) {
           throw createHttpError(400, `${product.name} is no longer available`);
@@ -742,20 +830,49 @@ router.post(
             `${product.name} cannot be paid by COD; remove it or switch payment`
           );
         }
-        if (Number(product.stock_quantity) <= 0) {
-          throw createHttpError(400, `${product.name} is out of stock`);
+
+        // Resolve the chosen size, if any, and enforce size selection for
+        // products that have sizes.
+        let variant = null;
+        if (line.product_variant_id) {
+          variant = variantById.get(line.product_variant_id);
+          if (!variant || variant.product_id !== product.id) {
+            throw createHttpError(
+              400,
+              `The selected size for ${product.name} is no longer available`
+            );
+          }
+        } else if (productHasSizes.has(product.id)) {
+          throw createHttpError(400, `Please choose a size for ${product.name}`);
         }
-        if (quantity > Number(product.stock_quantity)) {
+
+        const availableStock = variant
+          ? Number(variant.stock_quantity)
+          : Number(product.stock_quantity);
+        const stockLabel = variant
+          ? `${product.name} (${variant.name})`
+          : product.name;
+
+        if (availableStock <= 0) {
+          throw createHttpError(400, `${stockLabel} is out of stock`);
+        }
+        if (quantity > availableStock) {
           throw createHttpError(
             400,
-            `${product.name}: only ${product.stock_quantity} in stock`
+            `${stockLabel}: only ${availableStock} in stock`
           );
         }
 
         const unitPrice = Number(product.discount_price || product.price);
         const lineTotal = unitPrice * quantity;
         subtotal += lineTotal;
-        lineItems.push({ product, quantity, unit_price: unitPrice, line_total: lineTotal });
+        lineItems.push({
+          product,
+          variant,
+          quantity,
+          unit_price: unitPrice,
+          line_total: lineTotal
+        });
       }
 
       const shopperId = req.shopper?.id || null;
@@ -879,15 +996,18 @@ router.post(
       for (const line of lineItems) {
         const itemResult = await client.query(
           `INSERT INTO order_items (
-            order_id, product_id, product_name,
-            unit_price, quantity, line_total
+            order_id, product_id, product_variant_id, product_name,
+            variant_name, unit_price, quantity, line_total
           )
-          VALUES ($1, $2, $3, $4, $5, $6)
-          RETURNING id, product_id, product_name, unit_price, quantity, line_total`,
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          RETURNING id, product_id, product_variant_id, product_name,
+                    variant_name, unit_price, quantity, line_total`,
           [
             orderResult.rows[0].id,
             line.product.id,
+            line.variant ? line.variant.id : null,
             line.product.name,
+            line.variant ? line.variant.name : null,
             line.unit_price,
             line.quantity,
             line.line_total

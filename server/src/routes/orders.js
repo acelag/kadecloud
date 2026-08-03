@@ -106,7 +106,8 @@ function mapDeliveryStatus(orderStatus) {
 
 async function reduceStockForOrder(client, order, userId) {
   const itemsResult = await client.query(
-    `SELECT order_items.product_id, order_items.quantity
+    `SELECT order_items.product_id, order_items.product_variant_id,
+            order_items.variant_name, order_items.quantity
      FROM order_items
      WHERE order_items.order_id = $1`,
     [order.id]
@@ -131,6 +132,37 @@ async function reduceStockForOrder(client, order, userId) {
 
     if (stockAfter < 0) {
       throw createHttpError(400, "Insufficient stock to confirm this order");
+    }
+
+    // When the line is for a specific size, decrement that size too. The
+    // product's aggregate stock mirrors the sum of sizes, so both move together.
+    if (item.product_variant_id) {
+      const variantResult = await client.query(
+        `SELECT id, stock_quantity
+         FROM product_variants
+         WHERE id = $1 AND product_id = $2
+         FOR UPDATE`,
+        [item.product_variant_id, item.product_id]
+      );
+
+      if (variantResult.rowCount === 0) {
+        throw createHttpError(404, "Order size was not found");
+      }
+
+      const variantAfter =
+        Number(variantResult.rows[0].stock_quantity) - Number(item.quantity);
+
+      if (variantAfter < 0) {
+        throw createHttpError(
+          400,
+          `Insufficient stock for size ${item.variant_name || ""} to confirm this order`
+        );
+      }
+
+      await client.query(
+        "UPDATE product_variants SET stock_quantity = $1 WHERE id = $2",
+        [variantAfter, item.product_variant_id]
+      );
     }
 
     await client.query("UPDATE products SET stock_quantity = $1 WHERE id = $2", [
@@ -168,7 +200,8 @@ async function reduceStockForOrder(client, order, userId) {
 
 async function restoreStockForOrder(client, order, userId) {
   const itemsResult = await client.query(
-    `SELECT order_items.product_id, order_items.quantity
+    `SELECT order_items.product_id, order_items.product_variant_id,
+            order_items.quantity
      FROM order_items
      WHERE order_items.order_id = $1`,
     [order.id]
@@ -190,6 +223,17 @@ async function restoreStockForOrder(client, order, userId) {
     const product = productResult.rows[0];
     const stockBefore = Number(product.stock_quantity);
     const stockAfter = stockBefore + Number(item.quantity);
+
+    // Return stock to the specific size, if one was chosen. A soft-removed
+    // size (is_active = false) still exists, so the restore lands correctly.
+    if (item.product_variant_id) {
+      await client.query(
+        `UPDATE product_variants
+            SET stock_quantity = stock_quantity + $1
+          WHERE id = $2 AND product_id = $3`,
+        [Number(item.quantity), item.product_variant_id, item.product_id]
+      );
+    }
 
     await client.query("UPDATE products SET stock_quantity = $1 WHERE id = $2", [
       stockAfter,

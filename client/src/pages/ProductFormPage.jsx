@@ -5,6 +5,7 @@ import { categoriesApi, productsApi, uploadsApi } from "../api/client.js";
 
 const MAX_GALLERY_IMAGES = 10;
 const MAX_ATTRIBUTES = 30;
+const MAX_SIZES = 30;
 
 const emptyProduct = {
   name: "",
@@ -19,7 +20,8 @@ const emptyProduct = {
   cod_available: true,
   is_active: true,
   images: [],
-  attributes: []
+  attributes: [],
+  sizes: []
 };
 
 function ProductFormPage({ mode }) {
@@ -81,6 +83,12 @@ function ProductFormPage({ mode }) {
                   label: String(a?.label || ""),
                   value: String(a?.value || "")
                 }))
+              : [],
+            sizes: Array.isArray(product.sizes)
+              ? product.sizes.map((s) => ({
+                  label: String(s?.label || ""),
+                  quantity: String(s?.quantity ?? 0)
+                }))
               : []
           });
         }
@@ -130,7 +138,13 @@ function ProductFormPage({ mode }) {
           label: String(row.label || "").trim(),
           value: String(row.value || "").trim()
         }))
-        .filter((row) => row.label && row.value)
+        .filter((row) => row.label && row.value),
+      sizes: form.sizes
+        .map((row) => ({
+          label: String(row.label || "").trim(),
+          quantity: Number.parseInt(row.quantity || "0", 10) || 0
+        }))
+        .filter((row) => row.label)
     };
   }
 
@@ -156,6 +170,31 @@ function ProductFormPage({ mode }) {
     setForm((current) => ({
       ...current,
       attributes: current.attributes.filter((_, i) => i !== index)
+    }));
+  }
+
+  function updateSize(index, field, value) {
+    setForm((current) => {
+      const next = current.sizes.slice();
+      next[index] = { ...next[index], [field]: value };
+      return { ...current, sizes: next };
+    });
+  }
+
+  function addSize() {
+    setForm((current) => {
+      if (current.sizes.length >= MAX_SIZES) return current;
+      return {
+        ...current,
+        sizes: [...current.sizes, { label: "", quantity: "0" }]
+      };
+    });
+  }
+
+  function removeSize(index) {
+    setForm((current) => ({
+      ...current,
+      sizes: current.sizes.filter((_, i) => i !== index)
     }));
   }
 
@@ -266,6 +305,12 @@ function ProductFormPage({ mode }) {
       </section>
     );
   }
+
+  const hasSizes = form.sizes.length > 0;
+  const sizesTotal = form.sizes.reduce(
+    (sum, row) => sum + (Number.parseInt(row.quantity || "0", 10) || 0),
+    0
+  );
 
   return (
     <div className="space-y-5">
@@ -423,15 +468,21 @@ function ProductFormPage({ mode }) {
             <span className="text-sm font-medium text-slate-700">
               Stock quantity
             </span>
-            <input
-              type="number"
-              min="0"
-              step="1"
-              name="stock_quantity"
-              value={form.stock_quantity}
-              onChange={updateField}
-              className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-            />
+            {hasSizes ? (
+              <div className="mt-2 flex h-11 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-500">
+                {sizesTotal} total — managed per size below
+              </div>
+            ) : (
+              <input
+                type="number"
+                min="0"
+                step="1"
+                name="stock_quantity"
+                value={form.stock_quantity}
+                onChange={updateField}
+                className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+              />
+            )}
           </label>
 
           <label className="block">
@@ -462,6 +513,81 @@ function ProductFormPage({ mode }) {
               placeholder="Short product description for the storefront"
             />
           </label>
+        </div>
+
+        <div className="mt-6 border-t border-slate-200 pt-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-950">
+                Sizes &amp; stock
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                Add sizes (e.g. S, M, L) with the stock available for each.
+                Customers pick a size before checkout. Leave empty for a product
+                with no sizes — then the single Stock quantity above is used.
+                Up to {MAX_SIZES} sizes.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={addSize}
+              disabled={form.sizes.length >= MAX_SIZES}
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-300 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Plus aria-hidden="true" size={15} />
+              Add size
+            </button>
+          </div>
+
+          {form.sizes.length === 0 ? (
+            <p className="mt-3 text-xs text-slate-500">
+              No sizes yet. Click "Add size" to track stock per size.
+            </p>
+          ) : (
+            <div className="mt-3 space-y-2">
+              {form.sizes.map((row, index) => (
+                <div
+                  key={index}
+                  className="grid gap-2 sm:grid-cols-[1fr_160px_44px]"
+                >
+                  <input
+                    value={row.label}
+                    onChange={(event) =>
+                      updateSize(index, "label", event.target.value)
+                    }
+                    maxLength={60}
+                    className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm font-semibold outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    placeholder="Size (e.g. M)"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={row.quantity}
+                    onChange={(event) =>
+                      updateSize(index, "quantity", event.target.value)
+                    }
+                    className="h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    placeholder="Qty"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeSize(index)}
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-rose-200 text-rose-700 transition hover:bg-rose-50"
+                    aria-label={`Remove size ${index + 1}`}
+                  >
+                    <Trash2 aria-hidden="true" size={16} />
+                  </button>
+                </div>
+              ))}
+              <p className="pt-1 text-xs text-slate-500">
+                Total stock across sizes:{" "}
+                <span className="font-semibold text-slate-700">
+                  {sizesTotal}
+                </span>
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="mt-6 border-t border-slate-200 pt-5">

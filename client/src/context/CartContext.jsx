@@ -21,13 +21,24 @@ function keyFor(slug) {
   return `${STORAGE_PREFIX}${slug || "_no_store"}`;
 }
 
+// A cart line is identified by product + chosen size, so the same product in
+// two sizes is two lines.
+function lineKey(productId, variantId) {
+  return `${productId}::${variantId || ""}`;
+}
+
 function readStored(slug) {
   if (!slug) return [];
   try {
     const raw = localStorage.getItem(keyFor(slug));
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    // Backfill `key` for carts saved before sizes existed.
+    return parsed.map((line) => ({
+      ...line,
+      key: line.key || lineKey(line.product_id, line.product_variant_id || null)
+    }));
   } catch (_err) {
     return [];
   }
@@ -87,13 +98,18 @@ export function CartProvider({ children }) {
   );
 
   const addItem = useCallback(
-    (product, quantity = 1) => {
+    (product, quantity = 1, variant = null) => {
       if (!activeStoreSlug || !product?.id) return;
-      const stock = Number(product.stock_quantity) || 0;
+      const stock = variant
+        ? Number(variant.stock_quantity) || 0
+        : Number(product.stock_quantity) || 0;
       if (stock <= 0) return;
 
+      const variantId = variant?.id || null;
+      const key = lineKey(product.id, variantId);
+
       setItems((current) => {
-        const existing = current.find((line) => line.product_id === product.id);
+        const existing = current.find((line) => line.key === key);
         const desired = clampQuantity(
           (existing?.quantity || 0) + quantity,
           stock
@@ -102,15 +118,18 @@ export function CartProvider({ children }) {
         let next;
         if (existing) {
           next = current.map((line) =>
-            line.product_id === product.id
-              ? { ...line, quantity: desired }
+            line.key === key
+              ? { ...line, quantity: desired, stock_quantity: stock }
               : line
           );
         } else {
           next = [
             ...current,
             {
+              key,
               product_id: product.id,
+              product_variant_id: variantId,
+              variant_name: variant?.name || null,
               name: product.name,
               image_url: product.image_url || null,
               unit_price: unitPrice(product),
@@ -128,11 +147,11 @@ export function CartProvider({ children }) {
   );
 
   const updateQuantity = useCallback(
-    (productId, quantity) => {
+    (key, quantity) => {
       setItems((current) => {
         const next = current
           .map((line) =>
-            line.product_id === productId
+            line.key === key
               ? { ...line, quantity: clampQuantity(quantity, line.stock_quantity) }
               : line
           )
@@ -145,9 +164,9 @@ export function CartProvider({ children }) {
   );
 
   const removeItem = useCallback(
-    (productId) => {
+    (key) => {
       setItems((current) => {
-        const next = current.filter((line) => line.product_id !== productId);
+        const next = current.filter((line) => line.key !== key);
         writeStored(activeStoreSlug, next);
         return next;
       });

@@ -100,7 +100,7 @@ function CartPage({ slug: slugProp } = {}) {
             <ul className="divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
               {items.map((line) => (
                 <li
-                  key={line.product_id}
+                  key={line.key || line.product_id}
                   className="grid gap-3 p-4 sm:grid-cols-[80px_1fr_140px_44px] sm:items-center"
                 >
                   <div className="h-20 w-20 shrink-0 overflow-hidden rounded-md bg-slate-100">
@@ -119,6 +119,11 @@ function CartPage({ slug: slugProp } = {}) {
                     >
                       {line.name}
                     </Link>
+                    {line.variant_name ? (
+                      <p className="mt-0.5 text-xs font-semibold text-slate-600">
+                        Size: {line.variant_name}
+                      </p>
+                    ) : null}
                     <p className="mt-1 text-sm text-slate-500">
                       {formatFromSource(line.unit_price, storeBaseCurrency)} each
                     </p>
@@ -136,7 +141,7 @@ function CartPage({ slug: slugProp } = {}) {
                     <button
                       type="button"
                       onClick={() =>
-                        updateQuantity(line.product_id, line.quantity - 1)
+                        updateQuantity(line.key, line.quantity - 1)
                       }
                       className="inline-flex h-full w-10 items-center justify-center text-slate-700 hover:bg-slate-50"
                       aria-label={`Decrease ${line.name}`}
@@ -149,7 +154,7 @@ function CartPage({ slug: slugProp } = {}) {
                     <button
                       type="button"
                       onClick={() =>
-                        updateQuantity(line.product_id, line.quantity + 1)
+                        updateQuantity(line.key, line.quantity + 1)
                       }
                       disabled={line.quantity >= line.stock_quantity}
                       className="inline-flex h-full w-10 items-center justify-center text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
@@ -160,7 +165,7 @@ function CartPage({ slug: slugProp } = {}) {
                   </div>
                   <button
                     type="button"
-                    onClick={() => removeItem(line.product_id)}
+                    onClick={() => removeItem(line.key)}
                     className="inline-flex h-10 w-10 items-center justify-center rounded-md text-slate-400 transition hover:bg-rose-50 hover:text-rose-700 sm:justify-self-end"
                     aria-label={`Remove ${line.name}`}
                   >

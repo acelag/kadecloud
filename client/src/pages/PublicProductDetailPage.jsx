@@ -19,6 +19,7 @@ function PublicProductDetailPage({ slug: slugProp } = {}) {
   const [store, setStore] = useState(null);
   const [product, setProduct] = useState(null);
   const [quantity, setQuantity] = useState(1);
+  const [selectedSizeId, setSelectedSizeId] = useState(null);
   const [activeImage, setActiveImage] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -68,8 +69,23 @@ function PublicProductDetailPage({ slug: slugProp } = {}) {
     };
   }, [slug, productId]);
 
-  const maxQuantity = Number(product?.stock_quantity || 0);
-  const isInStock = maxQuantity > 0;
+  const sizes = Array.isArray(product?.sizes) ? product.sizes : [];
+  const hasSizes = sizes.length > 0;
+  const selectedSize = hasSizes
+    ? sizes.find((size) => size.id === selectedSizeId) || null
+    : null;
+  const maxQuantity = hasSizes
+    ? Number(selectedSize?.stock_quantity || 0)
+    : Number(product?.stock_quantity || 0);
+  const isInStock = hasSizes
+    ? sizes.some((size) => size.in_stock)
+    : maxQuantity > 0;
+
+  // Picking a size (or changing it) resets the quantity to a valid 1.
+  useEffect(() => {
+    if (!hasSizes) return;
+    setQuantity(selectedSize && selectedSize.stock_quantity > 0 ? 1 : 0);
+  }, [selectedSizeId, hasSizes, selectedSize]);
 
   const galleryImages = useMemo(() => {
     const list = [];
@@ -105,11 +121,33 @@ function PublicProductDetailPage({ slug: slugProp } = {}) {
   }, [slug, setActiveStoreSlug]);
 
   const inCart =
-    cartItems.find((line) => line.product_id === product?.id) || null;
+    cartItems.find(
+      (line) =>
+        line.product_id === product?.id &&
+        (line.product_variant_id || null) === (selectedSizeId || null)
+    ) || null;
+
+  // Products with sizes require a size choice before either action is allowed.
+  const needsSize = hasSizes && !selectedSize;
+  const canPurchase = Boolean(product) && isInStock && !needsSize && quantity > 0;
+  const stockLabel = !isInStock
+    ? "Out of stock"
+    : hasSizes && !selectedSize
+      ? "In stock"
+      : `${maxQuantity} in stock`;
+
+  function variantForCart() {
+    if (!selectedSize) return null;
+    return {
+      id: selectedSize.id,
+      name: selectedSize.label,
+      stock_quantity: selectedSize.stock_quantity
+    };
+  }
 
   function handleAddToCart() {
-    if (!product || !isInStock) return;
-    addItem(product, quantity);
+    if (!canPurchase) return;
+    addItem(product, quantity, variantForCart());
     setAddedFlash(true);
     window.clearTimeout(handleAddToCart._timer);
     handleAddToCart._timer = window.setTimeout(
@@ -119,8 +157,8 @@ function PublicProductDetailPage({ slug: slugProp } = {}) {
   }
 
   function handleBuyNow() {
-    if (!product || !isInStock) return;
-    addItem(product, quantity);
+    if (!canPurchase) return;
+    addItem(product, quantity, variantForCart());
     navigate(`${storeBase}/checkout`);
   }
 
@@ -235,7 +273,7 @@ function PublicProductDetailPage({ slug: slugProp } = {}) {
                     : "bg-rose-50 text-rose-700"
                 }`}
               >
-                {isInStock ? `${maxQuantity} in stock` : "Out of stock"}
+                {stockLabel}
               </span>
               {product?.cod_available ? (
                 <span className="rounded-md bg-sky-50 px-3 py-1 text-sm font-semibold text-sky-700">
@@ -247,6 +285,39 @@ function PublicProductDetailPage({ slug: slugProp } = {}) {
             <p className="mt-6 text-sm leading-7 text-slate-600">
               {product?.description || "No description available."}
             </p>
+
+            {hasSizes ? (
+              <div className="mt-6">
+                <p className="text-sm font-medium text-slate-700">Size</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {sizes.map((size) => {
+                    const active = size.id === selectedSizeId;
+                    return (
+                      <button
+                        key={size.id}
+                        type="button"
+                        disabled={!size.in_stock}
+                        onClick={() => setSelectedSizeId(size.id)}
+                        className={`inline-flex h-10 min-w-[3rem] items-center justify-center rounded-md border px-3 text-sm font-semibold transition ${
+                          !size.in_stock
+                            ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-300 line-through"
+                            : active
+                              ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                              : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
+                        }`}
+                      >
+                        {size.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {needsSize ? (
+                  <p className="mt-2 text-xs font-semibold text-amber-600">
+                    Please select a size.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
 
             <div className="mt-6">
               <p className="text-sm font-medium text-slate-700">Quantity</p>
@@ -279,7 +350,7 @@ function PublicProductDetailPage({ slug: slugProp } = {}) {
               <button
                 type="button"
                 onClick={handleAddToCart}
-                disabled={!isInStock}
+                disabled={!canPurchase}
                 className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-md border border-emerald-500 bg-white px-4 text-sm font-bold text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {addedFlash
@@ -291,7 +362,7 @@ function PublicProductDetailPage({ slug: slugProp } = {}) {
               <button
                 type="button"
                 onClick={handleBuyNow}
-                disabled={!isInStock}
+                disabled={!canPurchase}
                 className="inline-flex h-12 flex-1 items-center justify-center rounded-md bg-emerald-500 px-4 text-sm font-bold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Buy now

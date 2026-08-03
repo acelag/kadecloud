@@ -113,6 +113,7 @@ function CheckoutPage({ slug: slugProp } = {}) {
         store_slug: slug,
         items: items.map((line) => ({
           product_id: line.product_id,
+          product_variant_id: line.product_variant_id || undefined,
           quantity: line.quantity
         })),
         name: form.name,
@@ -574,7 +575,7 @@ function CheckoutPage({ slug: slugProp } = {}) {
             <ul className="space-y-3">
               {items.map((line) => (
                 <li
-                  key={line.product_id}
+                  key={line.key || line.product_id}
                   className="flex items-start gap-3 text-sm"
                 >
                   <div className="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-slate-100">
@@ -588,6 +589,11 @@ function CheckoutPage({ slug: slugProp } = {}) {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold">{line.name}</p>
+                    {line.variant_name ? (
+                      <p className="text-xs font-semibold text-slate-600">
+                        Size: {line.variant_name}
+                      </p>
+                    ) : null}
                     <p className="text-xs text-slate-500">
                       {formatFromSource(line.unit_price, storeBaseCurrency)} ×{" "}
                       {line.quantity}
