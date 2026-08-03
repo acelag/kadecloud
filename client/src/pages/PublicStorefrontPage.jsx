@@ -36,8 +36,26 @@ function PublicStorefrontPage({ slug: slugProp } = {}) {
   const [categories, setCategories] = useState([]);
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [inStockOnly, setInStockOnly] = useState(false);
+  const [sort, setSort] = useState("newest");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const hasActiveFilters =
+    Boolean(categoryId) ||
+    Boolean(minPrice) ||
+    Boolean(maxPrice) ||
+    inStockOnly ||
+    sort !== "newest";
+
+  function clearFilters() {
+    setCategoryId("");
+    setMinPrice("");
+    setMaxPrice("");
+    setInStockOnly(false);
+    setSort("newest");
+  }
   const { formatFromSource, setStoreCurrency } = useCurrency();
   const { setActiveStoreSlug } = useCart();
   const storeBaseCurrency = store?.default_currency || "LKR";
@@ -88,7 +106,11 @@ function PublicStorefrontPage({ slug: slugProp } = {}) {
       try {
         const data = await publicStoreApi.listProducts(slug, {
           search,
-          category_id: categoryId
+          category_id: categoryId,
+          min_price: minPrice,
+          max_price: maxPrice,
+          in_stock: inStockOnly ? "true" : "",
+          sort
         });
 
         if (isMounted) {
@@ -112,7 +134,7 @@ function PublicStorefrontPage({ slug: slugProp } = {}) {
       isMounted = false;
       window.clearTimeout(timeoutId);
     };
-  }, [slug, search, categoryId]);
+  }, [slug, search, categoryId, minPrice, maxPrice, inStockOnly, sort]);
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-950">
@@ -163,132 +185,219 @@ function PublicStorefrontPage({ slug: slugProp } = {}) {
       ) : null}
 
       <section className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <label className="relative block">
-            <Search
-              aria-hidden="true"
-              size={18}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              className="h-11 w-full rounded-md border border-slate-300 pl-10 pr-3 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-              placeholder="Search products"
-            />
-          </label>
-
-          {categories.length > 0 ? (
-            <div className="mt-3 -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-              <button
-                type="button"
-                onClick={() => setCategoryId("")}
-                className={`inline-flex h-9 shrink-0 items-center rounded-full border px-3 text-sm font-semibold transition ${
-                  categoryId === ""
-                    ? "border-emerald-500 bg-emerald-50 text-emerald-700"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-950"
-                }`}
-              >
-                All
-              </button>
-              {categories.map((category) => {
-                const isActive = categoryId === category.id;
-                return (
+        <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
+          {/* Filter panel */}
+          <aside className="lg:sticky lg:top-20 lg:self-start">
+            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">
+                  Filters
+                </h2>
+                {hasActiveFilters ? (
                   <button
-                    key={category.id}
                     type="button"
-                    onClick={() => setCategoryId(isActive ? "" : category.id)}
-                    className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm font-semibold transition ${
-                      isActive
-                        ? "border-emerald-500 bg-emerald-50 text-emerald-700"
-                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-950"
-                    }`}
+                    onClick={clearFilters}
+                    className="text-xs font-semibold text-emerald-700 transition hover:text-emerald-800"
                   >
-                    <span>{category.name}</span>
-                    {typeof category.product_count === "number" ? (
-                      <span
-                        className={`rounded-full px-1.5 py-0.5 text-xs font-bold ${
-                          isActive
-                            ? "bg-emerald-100 text-emerald-700"
-                            : "bg-slate-100 text-slate-500"
-                        }`}
-                      >
-                        {category.product_count}
-                      </span>
-                    ) : null}
+                    Clear all
                   </button>
-                );
-              })}
-            </div>
-          ) : null}
-        </div>
+                ) : null}
+              </div>
 
-        {error ? (
-          <div className="mt-5 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
-        ) : null}
-
-        {loading ? (
-          <div className="mt-6 rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500">
-            Loading products...
-          </div>
-        ) : products.length === 0 ? (
-          <div className="mt-6 rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500">
-            No products found.
-          </div>
-        ) : (
-          <div className={`mt-6 grid gap-4 ${productGridClass}`}>
-            {products.map((product) => (
-              <Link
-                key={product.id}
-                to={`${storeBase}/product/${product.id}`}
-                className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-              >
-                <HoverCarousel
-                  images={[
-                    product.image_url,
-                    ...(Array.isArray(product.gallery_images)
-                      ? product.gallery_images
-                      : [])
-                  ].filter(Boolean)}
-                  alt={product.name}
-                  style={{ aspectRatio: cardAspect }}
-                />
-                <div className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h2 className="font-bold text-slate-950">{product.name}</h2>
-                      <p className="mt-1 text-sm text-slate-500">
-                        {product.category || "Uncategorized"}
-                      </p>
-                    </div>
-                    <span
-                      className={`rounded-md px-2 py-1 text-xs font-semibold ${
-                        product.in_stock
+              {categories.length > 0 ? (
+                <div className="mt-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Category
+                  </p>
+                  <div className="mt-2 space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => setCategoryId("")}
+                      className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-sm font-semibold transition ${
+                        categoryId === ""
                           ? "bg-emerald-50 text-emerald-700"
-                          : "bg-rose-50 text-rose-700"
+                          : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
                       }`}
                     >
-                      {product.in_stock ? "In stock" : "Out"}
-                    </span>
+                      All products
+                    </button>
+                    {categories.map((category) => {
+                      const isActive = categoryId === category.id;
+                      return (
+                        <button
+                          key={category.id}
+                          type="button"
+                          onClick={() =>
+                            setCategoryId(isActive ? "" : category.id)
+                          }
+                          className={`flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-sm font-semibold transition ${
+                            isActive
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+                          }`}
+                        >
+                          <span className="truncate">{category.name}</span>
+                          {typeof category.product_count === "number" ? (
+                            <span
+                              className={`shrink-0 rounded-full px-1.5 py-0.5 text-xs font-bold ${
+                                isActive
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : "bg-slate-100 text-slate-500"
+                              }`}
+                            >
+                              {category.product_count}
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <p className="mt-4 text-lg font-bold text-slate-950">
-                    {formatFromSource(
-                      product.discount_price || product.price,
-                      storeBaseCurrency
-                    )}
-                  </p>
-                  {product.discount_price ? (
-                    <p className="text-sm text-slate-400 line-through">
-                      {formatFromSource(product.price, storeBaseCurrency)}
-                    </p>
-                  ) : null}
                 </div>
-              </Link>
-            ))}
+              ) : null}
+
+              <div className="mt-5 border-t border-slate-100 pt-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Price ({storeBaseCurrency})
+                </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    inputMode="numeric"
+                    value={minPrice}
+                    onChange={(event) => setMinPrice(event.target.value)}
+                    placeholder="Min"
+                    className="h-10 w-full rounded-md border border-slate-300 px-2 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                  />
+                  <span className="text-slate-400">–</span>
+                  <input
+                    type="number"
+                    min="0"
+                    inputMode="numeric"
+                    value={maxPrice}
+                    onChange={(event) => setMaxPrice(event.target.value)}
+                    placeholder="Max"
+                    className="h-10 w-full rounded-md border border-slate-300 px-2 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-5 border-t border-slate-100 pt-4">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={inStockOnly}
+                    onChange={(event) => setInStockOnly(event.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-200"
+                  />
+                  In stock only
+                </label>
+              </div>
+
+              <div className="mt-5 border-t border-slate-100 pt-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Sort by
+                </p>
+                <select
+                  value={sort}
+                  onChange={(event) => setSort(event.target.value)}
+                  className="mt-2 h-10 w-full rounded-md border border-slate-300 px-2 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                >
+                  <option value="newest">Newest</option>
+                  <option value="price_asc">Price: Low to High</option>
+                  <option value="price_desc">Price: High to Low</option>
+                  <option value="name">Name (A–Z)</option>
+                </select>
+              </div>
+            </div>
+          </aside>
+
+          {/* Results */}
+          <div>
+            <label className="relative block">
+              <Search
+                aria-hidden="true"
+                size={18}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="h-11 w-full rounded-md border border-slate-300 bg-white pl-10 pr-3 text-sm shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                placeholder="Search products"
+              />
+            </label>
+
+            {error ? (
+              <div className="mt-5 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {error}
+              </div>
+            ) : null}
+
+            {loading ? (
+              <div className="mt-6 rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500">
+                Loading products...
+              </div>
+            ) : products.length === 0 ? (
+              <div className="mt-6 rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500">
+                No products match these filters.
+              </div>
+            ) : (
+              <div className={`mt-6 grid gap-4 ${productGridClass}`}>
+                {products.map((product) => (
+                  <Link
+                    key={product.id}
+                    to={`${storeBase}/product/${product.id}`}
+                    className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                  >
+                    <HoverCarousel
+                      images={[
+                        product.image_url,
+                        ...(Array.isArray(product.gallery_images)
+                          ? product.gallery_images
+                          : [])
+                      ].filter(Boolean)}
+                      alt={product.name}
+                      style={{ aspectRatio: cardAspect }}
+                    />
+                    <div className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h2 className="font-bold text-slate-950">
+                            {product.name}
+                          </h2>
+                          <p className="mt-1 text-sm text-slate-500">
+                            {product.category || "Uncategorized"}
+                          </p>
+                        </div>
+                        <span
+                          className={`rounded-md px-2 py-1 text-xs font-semibold ${
+                            product.in_stock
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-rose-50 text-rose-700"
+                          }`}
+                        >
+                          {product.in_stock ? "In stock" : "Out"}
+                        </span>
+                      </div>
+                      <p className="mt-4 text-lg font-bold text-slate-950">
+                        {formatFromSource(
+                          product.discount_price || product.price,
+                          storeBaseCurrency
+                        )}
+                      </p>
+                      {product.discount_price ? (
+                        <p className="text-sm text-slate-400 line-through">
+                          {formatFromSource(product.price, storeBaseCurrency)}
+                        </p>
+                      ) : null}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </section>
     </main>
   );

@@ -552,10 +552,35 @@ router.get(
       where.push(`products.category_id = $${params.length}`);
     }
 
+    // Filter on the effective (post-discount) price the shopper actually pays.
+    const minPrice = Number.parseFloat(req.query.min_price);
+    if (Number.isFinite(minPrice)) {
+      params.push(minPrice);
+      where.push(`COALESCE(products.discount_price, products.price) >= $${params.length}`);
+    }
+
+    const maxPrice = Number.parseFloat(req.query.max_price);
+    if (Number.isFinite(maxPrice)) {
+      params.push(maxPrice);
+      where.push(`COALESCE(products.discount_price, products.price) <= $${params.length}`);
+    }
+
+    if (String(req.query.in_stock) === "true") {
+      where.push("products.stock_quantity > 0");
+    }
+
+    const sortOptions = {
+      newest: "products.updated_at DESC",
+      price_asc: "COALESCE(products.discount_price, products.price) ASC",
+      price_desc: "COALESCE(products.discount_price, products.price) DESC",
+      name: "products.name ASC"
+    };
+    const orderBy = sortOptions[req.query.sort] || sortOptions.newest;
+
     const result = await query(
       `${productSelectSql()}
        WHERE ${where.join(" AND ")}
-       ORDER BY products.updated_at DESC`,
+       ORDER BY ${orderBy}`,
       params
     );
 
