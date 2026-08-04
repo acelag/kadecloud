@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   BarChart3,
   Boxes,
@@ -7,6 +8,7 @@ import {
   LayoutDashboard,
   Package,
   PanelLeftClose,
+  PanelLeftOpen,
   ScanBarcode,
   Settings,
   Store,
@@ -16,6 +18,8 @@ import {
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
+
+const COLLAPSE_STORAGE_KEY = "kadecloud:sidebar-collapsed";
 
 const operationsNavItems = [
   { label: "Dashboard", to: "/dashboard", icon: LayoutDashboard, end: true },
@@ -59,6 +63,16 @@ function Sidebar({ isOpen, onClose }) {
       ? storeAdminNavItems
       : operationsNavItems;
 
+  // Desktop-only collapse; persisted so it survives reloads. The mobile drawer
+  // always renders full width regardless of this state.
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(COLLAPSE_STORAGE_KEY) === "1";
+  });
+  useEffect(() => {
+    window.localStorage.setItem(COLLAPSE_STORAGE_KEY, isCollapsed ? "1" : "0");
+  }, [isCollapsed]);
+
   return (
     <>
       <div
@@ -69,12 +83,21 @@ function Sidebar({ isOpen, onClose }) {
       />
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-slate-200 bg-white transition-transform duration-200 lg:static lg:z-auto lg:h-screen lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-slate-200 bg-white transition-all duration-200 lg:static lg:z-auto lg:h-screen lg:translate-x-0 ${
           isOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        } ${isCollapsed ? "lg:w-20" : "lg:w-72"}`}
       >
-        <div className="flex h-16 items-center justify-between border-b border-slate-200 px-5">
-          <div className="flex min-w-0 items-center gap-3">
+        <div
+          className={`flex h-16 items-center justify-between gap-2 border-b border-slate-200 px-5 ${
+            isCollapsed ? "lg:px-2" : "lg:px-4"
+          }`}
+        >
+          {/* Full brand — always on mobile, and on desktop when expanded. */}
+          <div
+            className={`flex min-w-0 items-center gap-3 ${
+              isCollapsed ? "lg:hidden" : ""
+            }`}
+          >
             {logoUrl ? (
               // With a logo, show it larger on its own — the logo is the brand.
               <img
@@ -97,6 +120,53 @@ function Sidebar({ isOpen, onClose }) {
               </div>
             )}
           </div>
+
+          {/* Compact brand mark + expand toggle — desktop, collapsed only. */}
+          <div
+            className={`mx-auto flex-col items-center justify-center gap-1 ${
+              isCollapsed ? "hidden lg:flex" : "hidden"
+            }`}
+          >
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt={brandName}
+                className="h-7 w-7 shrink-0 object-contain"
+              />
+            ) : (
+              <span
+                className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-600 text-white"
+                aria-label={brandName}
+                title={brandName}
+              >
+                <Store aria-hidden="true" size={16} />
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => setIsCollapsed(false)}
+              title="Expand sidebar"
+              aria-label="Expand sidebar"
+              className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+            >
+              <PanelLeftOpen aria-hidden="true" size={16} />
+            </button>
+          </div>
+
+          {/* Collapse toggle — desktop, expanded only, beside the brand. */}
+          <button
+            type="button"
+            onClick={() => setIsCollapsed(true)}
+            title="Collapse sidebar"
+            aria-label="Collapse sidebar"
+            className={`h-10 w-10 items-center justify-center rounded-md border border-slate-200 text-slate-600 transition hover:bg-slate-50 ${
+              isCollapsed ? "hidden" : "hidden lg:inline-flex"
+            }`}
+          >
+            <PanelLeftClose aria-hidden="true" size={19} />
+          </button>
+
+          {/* Mobile drawer close. */}
           <button
             type="button"
             onClick={onClose}
@@ -114,16 +184,21 @@ function Sidebar({ isOpen, onClose }) {
               to={item.to}
               end={item.end}
               onClick={onClose}
+              title={item.label}
               className={({ isActive }) =>
                 `flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-semibold transition ${
+                  isCollapsed ? "lg:justify-center lg:px-0" : ""
+                } ${
                   isActive
                     ? "bg-emerald-50 text-emerald-700"
                     : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
                 }`
               }
             >
-              <item.icon aria-hidden="true" size={19} />
-              <span>{item.label}</span>
+              <item.icon aria-hidden="true" size={19} className="shrink-0" />
+              <span className={isCollapsed ? "lg:hidden" : ""}>
+                {item.label}
+              </span>
             </NavLink>
           ))}
         </nav>
