@@ -48,9 +48,13 @@ function LoginPage() {
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-white sm:px-6">
       <section className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl items-center gap-10 lg:grid-cols-[1fr_440px]">
         <div className="max-w-xl">
-          <p className="mb-3 text-sm font-semibold uppercase tracking-wide text-emerald-300">
-            KadeCloud
-          </p>
+          <div className="mb-6">
+            <img
+              src="/kadecloud-logo-dark.png"
+              alt="KadeCloud"
+              className="h-auto w-80 max-w-full sm:w-96"
+            />
+          </div>
           <h1 className="text-4xl font-bold tracking-normal sm:text-6xl">
             Sign in to manage your store.
           </h1>
@@ -58,7 +62,6 @@ function LoginPage() {
             Keep orders, stock, customers, and COD verification moving from one
             store workspace.
           </p>
-
         </div>
 
         <form
